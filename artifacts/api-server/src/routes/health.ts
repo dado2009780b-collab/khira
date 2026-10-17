@@ -27,6 +27,7 @@ router.get("/health", async (_req, res) => {
          ('book_bundle_books', 'cover_data'),
          ('book_bundle_books', 'cover_content_type'),
          ('book_bundle_orders', 'customer_id'),
+         ('book_bundle_customers', 'id'),
          ('book_bundle_customers', 'phone'),
          ('book_bundle_order_history', 'order_id'),
          ('book_bundle_admin_credentials', 'password_hash')
