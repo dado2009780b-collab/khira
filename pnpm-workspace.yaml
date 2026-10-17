@@ -73,6 +73,7 @@ onlyBuiltDependencies:
   - esbuild
   - msw
   - unrs-resolver
+  - workerd
 
 overrides:
   # Keep the current Windows build target available outside Replit.
