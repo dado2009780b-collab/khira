@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "باقة الكتب الإسلامية"
+description = "صفحة عربية لعرض باقة كتاب الداء والدواء والرحيق المختوم بسعر ثابت 199 دينارًا ليبيًا، مع نموذج طلب مرتبط بقاعدة بيانات ولوحة إدارة محمية لإدارة الطلبات ومحتوى العرض وصور الأغلفة."
+version = "1.0.0"
+id = "artifacts/islamic-book-bundle"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20442
+
+[services.development]
+run = "pnpm --filter @workspace/islamic-book-bundle run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/islamic-book-bundle", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/islamic-book-bundle/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20442"
+BASE_PATH = "/"

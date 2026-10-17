@@ -1,0 +1,765 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API for the Islamic book bundle landing page and administrator workspace
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: offer
+    description: Public offer content
+  - name: orders
+    description: Public order submission
+  - name: admin
+    description: Administrator-only order and offer management
+  - name: books
+    description: Public book covers and administrator upload operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /offer:
+    get:
+      operationId: getOffer
+      tags: [offer]
+      summary: Get the current offer and book details
+      responses:
+        "200":
+          description: Current public offer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Offer"
+  /orders:
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Place an order for one book bundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Order successfully saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderReceipt"
+        "400":
+          description: Invalid customer information
+        "429":
+          description: Too many order attempts
+  /books/{bookId}/cover:
+    get:
+      operationId: getPublicBookCover
+      tags: [books]
+      summary: Serve the currently selected public book cover
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+      responses:
+        "200":
+          description: Current book cover
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: No cover has been uploaded
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      tags: [admin]
+      summary: Get real order counts and revenue summaries
+      responses:
+        "200":
+          description: Dashboard summaries and chart series
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOverview"
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+  /admin/session:
+    get:
+      operationId: getAdminSession
+      tags: [admin]
+      summary: Check administrator session and initial password setup state
+      responses:
+        "200":
+          description: Current password-session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSessionState"
+  /admin/login:
+    post:
+      operationId: loginAdmin
+      tags: [admin]
+      summary: Start an administrator password session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: Password accepted and secure session cookie set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSessionState"
+        "401":
+          description: Password is incorrect
+        "429":
+          description: Too many login attempts
+  /admin/logout:
+    post:
+      operationId: logoutAdmin
+      tags: [admin]
+      summary: End the administrator password session
+      responses:
+        "200":
+          description: Session cookie cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLogoutResponse"
+  /admin/password:
+    patch:
+      operationId: changeAdminPassword
+      tags: [admin]
+      summary: Change the administrator password from an authenticated session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPasswordChangeInput"
+      responses:
+        "200":
+          description: Password changed and the active session rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSessionState"
+        "401":
+          description: Authentication required or current password incorrect
+  /admin/orders:
+    get:
+      operationId: listAdminOrders
+      tags: [admin]
+      summary: Search and filter customer orders
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 120
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: A page of matching orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOrderPage"
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+  /admin/orders/export:
+    get:
+      operationId: exportAdminOrders
+      tags: [admin]
+      summary: Export matching orders as UTF-8 CSV
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 120
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - name: fromDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Matching customer orders as UTF-8 CSV with BOM
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+  /admin/orders/{orderId}:
+    get:
+      operationId: getAdminOrder
+      tags: [admin]
+      summary: Get order details and status history
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Order and audit history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOrderDetail"
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Order not found
+    patch:
+      operationId: updateAdminOrder
+      tags: [admin]
+      summary: Update order status or internal notes
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOrder"
+        "400":
+          description: Invalid update
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Order not found
+  /admin/offer:
+    patch:
+      operationId: updateOffer
+      tags: [admin]
+      summary: Update public offer copy, book details, and pricing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfferUpdate"
+      responses:
+        "200":
+          description: Updated public offer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Offer"
+        "400":
+          description: Invalid offer content
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+  /admin/books/{bookId}/cover:
+    put:
+      operationId: saveBookCover
+      tags: [admin, books]
+      summary: Store a book cover image in the database
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Updated cover
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Invalid image type or size
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Book not found
+    delete:
+      operationId: deleteBookCover
+      tags: [admin, books]
+      summary: Remove the active cover for a book
+      parameters:
+        - $ref: "#/components/parameters/BookId"
+      responses:
+        "200":
+          description: Book with no cover
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Book not found
+components:
+  parameters:
+    BookId:
+      name: bookId
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [dawa-wa-dawa, alraheeq-almakhtoom]
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AdminSessionState:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        configured:
+          type: boolean
+      required: [authenticated, configured]
+    AdminLoginInput:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 256
+      required: [password]
+    AdminLogoutResponse:
+      type: object
+      properties:
+        loggedOut:
+          type: boolean
+      required: [loggedOut]
+    AdminPasswordChangeInput:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 256
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 256
+      required: [currentPassword, newPassword]
+    OrderStatus:
+      type: string
+      enum:
+        - new
+        - contacted
+        - confirmed
+        - preparing
+        - shipped
+        - completed
+        - cancelled
+    Book:
+      type: object
+      properties:
+        id:
+          type: string
+          enum: [dawa-wa-dawa, alraheeq-almakhtoom]
+        title:
+          type: string
+        author:
+          type: string
+        description:
+          type: string
+        coverUrl:
+          type: ["string", "null"]
+      required: [id, title, author, description, coverUrl]
+    Offer:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        closingText:
+          type: string
+        ctaText:
+          type: string
+        price:
+          type: integer
+          minimum: 0
+        deliveryFee:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+        packageName:
+          type: string
+        benefits:
+          type: array
+          items:
+            type: string
+        books:
+          type: array
+          items:
+            $ref: "#/components/schemas/Book"
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - title
+        - description
+        - closingText
+        - ctaText
+        - price
+        - deliveryFee
+        - currency
+        - packageName
+        - benefits
+        - books
+        - updatedAt
+    OfferBookInput:
+      type: object
+      properties:
+        id:
+          type: string
+          enum: [dawa-wa-dawa, alraheeq-almakhtoom]
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        author:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required: [id, title, author, description]
+    OfferUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 240
+        description:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        closingText:
+          type: string
+          minLength: 1
+          maxLength: 500
+        ctaText:
+          type: string
+          minLength: 1
+          maxLength: 80
+        price:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+        deliveryFee:
+          type: integer
+          minimum: 0
+          maximum: 1000000
+        packageName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        benefits:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 240
+        books:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: "#/components/schemas/OfferBookInput"
+      required:
+        - title
+        - description
+        - closingText
+        - ctaText
+        - price
+        - deliveryFee
+        - packageName
+        - benefits
+        - books
+    OrderInput:
+      type: object
+      properties:
+        customerName:
+          type: string
+          minLength: 2
+          maxLength: 120
+        phone:
+          type: string
+          minLength: 7
+          maxLength: 24
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+      required: [customerName, phone, city]
+    OrderReceipt:
+      type: object
+      properties:
+        orderNumber:
+          type: string
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        createdAt:
+          type: string
+          format: date-time
+        totalAmount:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+      required: [orderNumber, status, createdAt, totalAmount, currency]
+    AdminOrder:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderNumber:
+          type: string
+        customerName:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        productName:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: integer
+        deliveryFee:
+          type: integer
+        totalAmount:
+          type: integer
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        adminNotes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - orderNumber
+        - customerName
+        - phone
+        - city
+        - productName
+        - quantity
+        - unitPrice
+        - deliveryFee
+        - totalAmount
+        - status
+        - adminNotes
+        - createdAt
+        - updatedAt
+    OrderHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        previousStatus:
+          type: ["string", "null"]
+          enum: [new, contacted, confirmed, preparing, shipped, completed, cancelled, null]
+        newStatus:
+          $ref: "#/components/schemas/OrderStatus"
+        adminUserId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, previousStatus, newStatus, adminUserId, createdAt]
+    AdminOrderDetail:
+      type: object
+      properties:
+        order:
+          $ref: "#/components/schemas/AdminOrder"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderHistoryEntry"
+      required: [order, history]
+    OrderUpdate:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        adminNotes:
+          type: string
+          maxLength: 5000
+    AdminOrderPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminOrder"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+      required: [items, page, pageSize, total]
+    StatusCount:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        count:
+          type: integer
+      required: [status, count]
+    DailyOrderCount:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        count:
+          type: integer
+      required: [date, count]
+    AdminOverview:
+      type: object
+      properties:
+        totalOrders:
+          type: integer
+        todayOrders:
+          type: integer
+        last7DaysOrders:
+          type: integer
+        newOrdersValue:
+          type: integer
+        confirmedOrdersValue:
+          type: integer
+        completedOrdersValue:
+          type: integer
+        statusCounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatusCount"
+        dailyOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyOrderCount"
+      required:
+        - totalOrders
+        - todayOrders
+        - last7DaysOrders
+        - newOrdersValue
+        - confirmedOrdersValue
+        - completedOrdersValue
+        - statusCounts
+        - dailyOrders
