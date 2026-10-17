@@ -2,10 +2,10 @@ import { createServer } from "node:http";
 import { httpServerHandler } from "cloudflare:node";
 
 interface Env {
-  DATABASE_URL: string;
+  DATABASE_URL?: string;
   ASSETS: { fetch(request: Request): Promise<Response> };
-  ADMIN_PASSWORD: string;
-  SESSION_SECRET: string;
+  ADMIN_PASSWORD?: string;
+  SESSION_SECRET?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
 }
@@ -50,8 +50,44 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: WorkerContext): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path === "/api" || path.startsWith("/api/")) {
-      const handler = await getApiHandler(env);
-      return handler.fetch(request, env, ctx);
+      const missing = (["DATABASE_URL", "ADMIN_PASSWORD", "SESSION_SECRET"] as const)
+        .filter((key) => !env[key]?.trim());
+
+      if (missing.length > 0) {
+        console.error("Worker runtime configuration is missing required secrets", {
+          missing,
+        });
+        return Response.json(
+          {
+            error: "إعدادات تشغيل الموقع غير مكتملة.",
+            code: "MISSING_RUNTIME_SECRETS",
+            missing,
+            help: "أضف هذه القيم في إعدادات Worker ضمن Runtime Variables and Secrets لبيئة Production، ثم أعد النشر.",
+          },
+          { status: 503 },
+        );
+      }
+
+      try {
+        const handler = await getApiHandler(env as Env & {
+          DATABASE_URL: string;
+          ADMIN_PASSWORD: string;
+          SESSION_SECRET: string;
+        });
+        return await handler.fetch(request, env, ctx);
+      } catch (error) {
+        // Keep Cloudflare's generic Error 1101 page from hiding the real cause.
+        // Never return environment values or a connection string to the browser.
+        console.error("Worker API initialization failed", error);
+        return Response.json(
+          {
+            error: "تعذر تشغيل واجهة الموقع.",
+            code: "API_INITIALIZATION_FAILED",
+            help: "افتح Workers & Pages → khira → Observability → Logs لقراءة سبب الخطأ، من دون مشاركة أي أسرار.",
+          },
+          { status: 503 },
+        );
+      }
     }
 
     return env.ASSETS.fetch(request);

@@ -15,7 +15,7 @@
 
 ## ربط Supabase بقاعدة البيانات
 
-لا يحتاج هذا الإعداد إلى Hyperdrive. يستخدم Worker اتصال PostgreSQL عبر TCP مباشرة، ويقرأ رابط الاتصال من سر اسمه `DATABASE_URL`.
+يستخدم Worker اتصال PostgreSQL من خلال `pg` ويقرأ رابط الاتصال من سر اسمه `DATABASE_URL`. لبيئة Workers استخدم **Transaction pooler** من Supabase (المنفذ `6543`).
 
 من Supabase اختر **Connect → Transaction pooler** وانسخ رابط الاتصال، عادةً يكون على المنفذ `6543`. هذا مناسب لطلبات Worker القصيرة، ويتفادى اعتماد الموقع على Hyperdrive. ألصق الرابط كاملًا في Cloudflare كـ Secret، ولا تضعه في GitHub أو ملف إعداد Wrangler. إذا كانت كلمة المرور تحتوي رموزًا خاصة، انسخ الرابط من Supabase مع ترميز كلمة المرور كما يعرضها الاتصال.
 
@@ -25,10 +25,16 @@
 
 - `ADMIN_PASSWORD` — كلمة مرور إدارة طويلة.
 - `SESSION_SECRET` — سر جلسة عشوائي لا يقل عن 32 حرفًا.
-- `DATABASE_URL` — رابط Supabase **Session pooler** الكامل، ويُحفظ كـ Secret.
+- `DATABASE_URL` — رابط Supabase **Transaction pooler** الكامل، وعادةً يكون المنفذ `6543`، ويُحفظ كـ Secret.
 - `TELEGRAM_BOT_TOKEN` و`TELEGRAM_CHAT_ID` — اختياريان لإشعارات الطلبات.
 
-لإضافة السر: افتح **Workers & Pages → khira → Settings → Variables and Secrets → Add**، واختر نوع **Secret**، ثم الاسم `DATABASE_URL` والصق رابط الاتصال في خانة القيمة. اضغط حفظ، وبعدها أعد النشر. تأكد من ضبط نفس الأسرار في إعدادات بيئتي **Production** و**Preview** إذا كنت ستستخدم المعاينة.
+مهم: إعدادات **Build variables and secrets** ليست إعدادات التشغيل. أضف الأسرار من **Workers & Pages → khira → Settings → Variables and Secrets → Runtime variables and secrets**، واختر بيئة **Production** ثم **Add variable**، وحدد النوع **Secret**. أضف `DATABASE_URL` و`ADMIN_PASSWORD` و`SESSION_SECRET` (والاختياريين `TELEGRAM_BOT_TOKEN` و`TELEGRAM_CHAT_ID`)، ثم احفظ وأعد النشر. إذا كنت تستخدم المعاينة فأضفها أيضًا لبيئة Preview.
+
+بعد النشر افتح `https://khira.ly/api/health`:
+- `status: ok` يعني أن Worker اتصل بقاعدة البيانات والجداول الأساسية موجودة.
+- `MISSING_RUNTIME_SECRETS` يعني أن الأسرار لم تُضف في Runtime لبيئة Production.
+- `database_unavailable` يعني أن رابط الاتصال أو بياناته أو المنفذ بحاجة إلى تصحيح.
+- `database_schema_incomplete` يعرض أسماء الجداول الناقصة.
 
 ## أوامر البناء والنشر
 
