@@ -28,6 +28,10 @@ function getApiHandler(env: Env): Promise<HttpHandler> {
     // node:net; Hyperdrive is optional for this connection.
     process.env.DATABASE_URL = env.DATABASE_URL;
     process.env.PORT = "3000";
+    // The logger's development mode starts pino-pretty in a worker thread,
+    // which is not available in the Workers runtime. Set this before importing
+    // the Express app so the logger selects its Worker-safe configuration.
+    process.env.CLOUDFLARE_WORKERS = "1";
     process.env.ADMIN_PASSWORD = env.ADMIN_PASSWORD;
     process.env.SESSION_SECRET = env.SESSION_SECRET;
     if (env.TELEGRAM_BOT_TOKEN) {
@@ -41,7 +45,11 @@ function getApiHandler(env: Env): Promise<HttpHandler> {
     const server = createServer(app);
     server.listen(3000);
     return httpServerHandler({ port: 3000 }) as HttpHandler;
-  })();
+  })().catch((error: unknown) => {
+    // Do not poison this isolate with a permanently rejected initialization.
+    apiHandler = undefined;
+    throw error;
+  });
 
   return apiHandler;
 }
