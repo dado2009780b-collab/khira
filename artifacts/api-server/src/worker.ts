@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { httpServerHandler } from "cloudflare:node";
 
 interface Env {
-  HYPERDRIVE: { connectionString: string };
+  DATABASE_URL: string;
   ASSETS: { fetch(request: Request): Promise<Response> };
   ADMIN_PASSWORD: string;
   SESSION_SECRET: string;
@@ -23,9 +23,10 @@ let apiHandler: Promise<HttpHandler> | undefined;
 
 function getApiHandler(env: Env): Promise<HttpHandler> {
   apiHandler ??= (async () => {
-    // Initialize the existing Express app after the per-Worker bindings are
-    // available, so its PostgreSQL pool receives Hyperdrive's connection URL.
-    process.env.DATABASE_URL = env.HYPERDRIVE.connectionString;
+    // Initialize the existing Express app after Worker secrets are available.
+    // Cloudflare Workers supports outbound PostgreSQL TCP sockets through
+    // node:net; Hyperdrive is optional for this connection.
+    process.env.DATABASE_URL = env.DATABASE_URL;
     process.env.PORT = "3000";
     process.env.ADMIN_PASSWORD = env.ADMIN_PASSWORD;
     process.env.SESSION_SECRET = env.SESSION_SECRET;

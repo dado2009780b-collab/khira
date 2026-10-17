@@ -10,7 +10,13 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Keep one TLS connection per warm Worker isolate. Supabase's shared
+// transaction pooler handles the cross-isolate pooling for serverless traffic.
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 1,
+  ssl: true,
+});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";

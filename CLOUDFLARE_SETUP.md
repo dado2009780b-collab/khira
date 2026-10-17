@@ -15,9 +15,9 @@
 
 ## ربط Supabase بقاعدة البيانات
 
-أنشئ Hyperdrive من لوحة Cloudflare: **Workers & Pages → Hyperdrive → Create configuration**. اختر PostgreSQL، وأدخل اتصال قاعدة Supabase المباشر من **Project Settings → Database**. استخدم الاتصال المباشر، وليس رابط Supabase API أو مفتاح `service_role`.
+لا يحتاج هذا الإعداد إلى Hyperdrive. يستخدم Worker اتصال PostgreSQL عبر TCP مباشرة، ويقرأ رابط الاتصال من سر اسمه `DATABASE_URL`.
 
-بعد إنشاء Hyperdrive، انسخ معرّف الإعداد إلى `id` في قسم `hyperdrive` داخل `wrangler.jsonc` بدل `REPLACE_WITH_HYPERDRIVE_ID`. يجب فعل ذلك قبل نشر Worker حتى يستطيع Cloudflare ربط قاعدة البيانات.
+من Supabase اختر **Connect → Transaction pooler** وانسخ رابط الاتصال، عادةً يكون على المنفذ `6543`. هذا مناسب لطلبات Worker القصيرة، ويتفادى اعتماد الموقع على Hyperdrive. ألصق الرابط كاملًا في Cloudflare كـ Secret، ولا تضعه في GitHub أو ملف إعداد Wrangler. إذا كانت كلمة المرور تحتوي رموزًا خاصة، انسخ الرابط من Supabase مع ترميز كلمة المرور كما يعرضها الاتصال.
 
 ## إضافة الأسرار
 
@@ -25,9 +25,10 @@
 
 - `ADMIN_PASSWORD` — كلمة مرور إدارة طويلة.
 - `SESSION_SECRET` — سر جلسة عشوائي لا يقل عن 32 حرفًا.
+- `DATABASE_URL` — رابط Supabase **Session pooler** الكامل، ويُحفظ كـ Secret.
 - `TELEGRAM_BOT_TOKEN` و`TELEGRAM_CHAT_ID` — اختياريان لإشعارات الطلبات.
 
-لا تضف `DATABASE_URL`: Worker يتصل بقاعدة Supabase عبر Hyperdrive.
+لإضافة السر: افتح **Workers & Pages → khira → Settings → Variables and Secrets → Add**، واختر نوع **Secret**، ثم الاسم `DATABASE_URL` والصق رابط الاتصال في خانة القيمة. اضغط حفظ، وبعدها أعد النشر. تأكد من ضبط نفس الأسرار في إعدادات بيئتي **Production** و**Preview** إذا كنت ستستخدم المعاينة.
 
 ## أوامر البناء والنشر
 
