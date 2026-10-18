@@ -15,7 +15,7 @@ import {
   ArrowLeft, ArrowUpRight, BookOpen, Check, CheckCircle2, ChevronLeft,
   ChevronRight, CircleDollarSign, Clock3, Copy, FileDown, House, ImagePlus,
   KeyRound, LoaderCircle, LogOut, Menu, PackageCheck, Plus, RefreshCw, Search, ShieldAlert,
-  ShoppingBag, Sparkles, Truck, Upload, Users, X,
+  Send, ShoppingBag, Sparkles, Truck, Upload, Users, X,
 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -389,6 +389,51 @@ function AdminPasswordPanel() {
   const [confirmation, setConfirmation] = useState('');
   const [failure, setFailure] = useState('');
   const [success, setSuccess] = useState('');
+  const [telegramTesting, setTelegramTesting] = useState(false);
+  const [telegramResult, setTelegramResult] = useState('');
+  const [telegramFailure, setTelegramFailure] = useState('');
+
+  const testTelegram = async () => {
+    setTelegramTesting(true);
+    setTelegramResult('');
+    setTelegramFailure('');
+    try {
+      const response = await fetch(`${basePath}/api/admin/telegram/test`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const result = await response.json().catch(() => null) as {
+        error?: string;
+        reason?: string;
+      } | null;
+      if (!response.ok) {
+        const reason = result?.reason;
+        const detail = reason === 'missing_configuration'
+          ? 'تأكد من إعداد TELEGRAM_BOT_TOKEN وTELEGRAM_CHAT_ID في بيئة Production.'
+          : reason === 'telegram_http_400'
+            ? 'رفض Telegram معرّف المحادثة أو محتوى الرسالة.'
+            : reason === 'telegram_http_401'
+              ? 'رفض Telegram توكن البوت.'
+                : reason === 'telegram_http_403'
+                  ? 'ليس للبوت إذن بإرسال الرسائل إلى هذه المحادثة.'
+                  : reason === 'telegram_http_404'
+                    ? 'توكن البوت غير صالح.'
+                    : reason === 'telegram_http_429'
+                      ? 'قيّد Telegram الإرسال مؤقتًا. حاول لاحقًا.'
+                : reason === 'timeout'
+                  ? 'انتهت مهلة الاتصال بـ Telegram.'
+                  : reason === 'network_error'
+                  ? 'تعذر الاتصال بخوادم Telegram.'
+                  : '';
+        throw new Error(detail || result?.error || 'تعذر إرسال رسالة الاختبار.');
+      }
+      setTelegramResult('وصلت رسالة الاختبار إلى محادثة Telegram بنجاح.');
+    } catch (error) {
+      setTelegramFailure(error instanceof Error ? error.message : 'تعذر إرسال رسالة الاختبار.');
+    } finally {
+      setTelegramTesting(false);
+    }
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -429,6 +474,14 @@ function AdminPasswordPanel() {
         {success && <p role="status" className="rounded-xl bg-[#e8f0e5] p-3 text-sm text-[#315b3c]">{success}</p>}
         <button type="submit" disabled={changePassword.isPending || !currentPassword || !newPassword || !confirmation} className={primaryButton}>{changePassword.isPending ? <><LoaderCircle size={16} className="animate-spin"/> جارٍ التغيير…</> : 'حفظ كلمة المرور الجديدة'}</button>
       </form>
+    </div>
+    <div className="mt-5 rounded-2xl border border-[#ded5c4] bg-[#fbf8f0] p-6 md:p-8">
+      <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-full bg-[#e8dfcc] text-[#7f6a3c]"><Send size={19}/></span><div><h2 className="text-xl font-extrabold">فحص إشعارات Telegram</h2><p className="mt-1 text-sm text-[#6d7369]">يرسل رسالة اختبار إلى محادثة البوت المضبوطة على الخادم.</p></div></div>
+      {telegramFailure && <p role="alert" className="mt-4 rounded-xl bg-[#fbefea] p-3 text-sm text-[#744638]">{telegramFailure}</p>}
+      {telegramResult && <p role="status" className="mt-4 rounded-xl bg-[#e8f0e5] p-3 text-sm text-[#315b3c]">{telegramResult}</p>}
+      <button type="button" onClick={() => void testTelegram()} disabled={telegramTesting} className={`${outlineButton} mt-5`}>
+        {telegramTesting ? <><LoaderCircle size={16} className="animate-spin"/> جارٍ الفحص…</> : <><Send size={16}/> إرسال رسالة اختبار</>}
+      </button>
     </div>
   </section>;
 }

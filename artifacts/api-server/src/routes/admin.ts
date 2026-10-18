@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import rateLimit from "express-rate-limit";
 import {
   and,
   asc,
@@ -35,10 +36,21 @@ import {
   type OrderStatus as DbOrderStatus,
 } from "@workspace/db";
 import { getOfferPayload, ensureDefaultOffer } from "../lib/bookBundleContent";
-import { requireAdmin } from "../middlewares/adminPasswordAuth";
+import { sendOrderNotification } from "../lib/telegram";
+import {
+  isSameOriginRequest,
+  requireAdmin,
+} from "../middlewares/adminPasswordAuth";
 
 const router: IRouter = Router();
 router.use("/admin", requireAdmin);
+
+const telegramTestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 1,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
 
 type AdminFilters = {
   search?: string;
@@ -340,6 +352,44 @@ router.get("/admin/overview", async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.post(
+  "/admin/telegram/test",
+  telegramTestLimiter,
+  async (req, res): Promise<void> => {
+    if (!isSameOriginRequest(req)) {
+      res.status(403).json({ error: "تعذر التحقق من مصدر الطلب." });
+      return;
+    }
+
+    const result = await sendOrderNotification(
+      {
+        orderNumber: `TEST-${Date.now()}`,
+        customerName: "اختبار لوحة الإدارة",
+        phone: "—",
+        city: "اختبار",
+        productName: "فحص اتصال Telegram",
+        quantity: 1,
+        unitPrice: 0,
+        deliveryFee: 0,
+        totalAmount: 0,
+        currency: "",
+        status: "new",
+      },
+      req.log,
+    );
+
+    if (!result.sent) {
+      res.status(502).json({
+        error: "تعذر إرسال رسالة الاختبار إلى Telegram.",
+        reason: result.reason,
+      });
+      return;
+    }
+
+    res.json({ sent: true });
+  },
+);
 
 router.get("/admin/orders", async (req, res): Promise<void> => {
   const parsedFilters = parseFilters(req.query);

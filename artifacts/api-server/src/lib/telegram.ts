@@ -16,7 +16,7 @@ import { logger, type AppLogger } from "./logger.js";
 
 const TELEGRAM_API_BASE = "https://api.telegram.org";
 
-/** Read once at module load — fails gracefully if vars are absent. */
+/** Read the current runtime environment so Cloudflare bindings are honored. */
 function getConfig(): { token: string; chatId: string } | null {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
@@ -60,6 +60,10 @@ export interface OrderNotificationPayload {
   status: string;
 }
 
+export type TelegramNotificationResult =
+  | { sent: true }
+  | { sent: false; reason: string };
+
 function buildMessage(order: OrderNotificationPayload): string {
   const statusLabel = STATUS_LABELS[order.status] ?? order.status;
   const lines = [
@@ -94,13 +98,13 @@ function escapeMarkdown(text: string): string {
  * Safe to call fire-and-forget:
  *   void sendOrderNotification(payload, log);
  *
- * Never throws. Returns `true` on success, `false` on any failure.
+ * Never throws. Returns a safe failure reason without exposing credentials.
  */
 export async function sendOrderNotification(
   payload: OrderNotificationPayload,
   /** Pass req.log so errors are correlated with the request. */
   requestLogger: AppLogger,
-): Promise<boolean> {
+): Promise<TelegramNotificationResult> {
   const activeConfig = getConfig();
   if (!activeConfig) {
     requestLogger.warn(
@@ -110,7 +114,7 @@ export async function sendOrderNotification(
       },
       "Telegram notification skipped because its runtime configuration is incomplete.",
     );
-    return false;
+    return { sent: false, reason: "missing_configuration" };
   }
 
   const text = buildMessage(payload);
@@ -136,20 +140,26 @@ export async function sendOrderNotification(
         { telegramStatus: response.status, orderNumber: payload.orderNumber },
         `Telegram notification failed: HTTP ${response.status} — ${body.slice(0, 200)}`,
       );
-      return false;
+      return { sent: false, reason: `telegram_http_${response.status}` };
     }
 
     requestLogger.info(
       { orderNumber: payload.orderNumber },
       "Telegram order notification sent successfully",
     );
-    return true;
+    return { sent: true };
   } catch (err) {
     // Network errors, timeouts, etc.
     requestLogger.warn(
       { err, orderNumber: payload.orderNumber },
       "Telegram notification error (non-fatal)",
     );
-    return false;
+    return {
+      sent: false,
+      reason:
+        err instanceof Error && /timeout|abort/i.test(err.name)
+          ? "timeout"
+          : "network_error",
+    };
   }
 }
