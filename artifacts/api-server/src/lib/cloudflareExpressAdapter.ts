@@ -17,10 +17,12 @@ class WorkerRequest extends Readable {
     encrypted: boolean;
     remoteAddress: string;
     remotePort: number;
+    readable: boolean;
     address(): { address: string; family: string; port: number };
   };
   readonly connection: WorkerRequest["socket"];
-  readonly complete = true;
+  // Express skips body parsing when it thinks this stream is already finished.
+  complete = false;
   readonly httpVersion = "1.1";
   readonly httpVersionMajor = 1;
   readonly httpVersionMinor = 1;
@@ -33,6 +35,7 @@ class WorkerRequest extends Readable {
     const url = new URL(request.url);
     const remoteAddress = request.headers.get("cf-connecting-ip") ?? "";
     this.headers = Object.fromEntries(request.headers.entries());
+    this.headers["content-length"] = String(body.byteLength);
     this.method = request.method;
     this.url = `${url.pathname}${url.search}`;
     this.body = body;
@@ -41,6 +44,7 @@ class WorkerRequest extends Readable {
       encrypted: url.protocol === "https:",
       remoteAddress,
       remotePort: 443,
+      readable: true,
       address: () => ({ address: remoteAddress, family: "IPv4", port: 443 }),
     };
     this.connection = this.socket;
@@ -51,6 +55,8 @@ class WorkerRequest extends Readable {
     this.bodySent = true;
     this.push(this.body);
     this.push(null);
+    this.complete = true;
+    this.socket.readable = false;
   }
 }
 
