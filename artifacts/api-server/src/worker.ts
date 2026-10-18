@@ -3,8 +3,8 @@ import { httpServerHandler } from "cloudflare:node";
 import { withRequestDatabase } from "@workspace/db";
 
 interface Env {
-  DATABASE_URL?: string;
-  ASSETS: { fetch(request: Request): Promise<Response> };
+  HYPERDRIVE?: { connectionString: string };
+  ASSETS?: { fetch(request: Request): Promise<Response> };
   ADMIN_PASSWORD?: string;
   SESSION_SECRET?: string;
   TELEGRAM_BOT_TOKEN?: string;
@@ -22,12 +22,14 @@ interface HttpHandler {
 
 let apiHandler: Promise<HttpHandler> | undefined;
 
-function getApiHandler(env: Env): Promise<HttpHandler> {
+function getApiHandler(
+  env: Env & { HYPERDRIVE: { connectionString: string } },
+): Promise<HttpHandler> {
   apiHandler ??= (async () => {
     // Initialize the existing Express app after Worker secrets are available.
-    // Cloudflare Workers supports outbound PostgreSQL TCP sockets through
-    // node:net; Hyperdrive is optional for this connection.
-    process.env.DATABASE_URL = env.DATABASE_URL;
+    // Hyperdrive owns the long-lived database pool. Local development reads
+    // DATABASE_URL through the separate Node server entrypoint.
+    process.env.DATABASE_URL = env.HYPERDRIVE.connectionString;
     process.env.PORT = "3000";
     process.env.ADMIN_PASSWORD = env.ADMIN_PASSWORD;
     process.env.SESSION_SECRET = env.SESSION_SECRET;
@@ -59,23 +61,24 @@ const worker = {
   ): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path === "/api" || path.startsWith("/api/")) {
-      const missing = (
-        ["DATABASE_URL", "ADMIN_PASSWORD", "SESSION_SECRET"] as const
-      ).filter((key) => !env[key]?.trim());
+      const hyperdriveConnectionString = env.HYPERDRIVE?.connectionString;
+      const missing: string[] = ["ADMIN_PASSWORD", "SESSION_SECRET"].filter(
+        (key) => !env[key as "ADMIN_PASSWORD" | "SESSION_SECRET"]?.trim(),
+      );
+      if (!hyperdriveConnectionString) {
+        missing.unshift("HYPERDRIVE");
+      }
 
       if (missing.length > 0) {
-        console.error(
-          "Worker runtime configuration is missing required secrets",
-          {
-            missing,
-          },
-        );
+        console.error("Worker runtime configuration is incomplete", {
+          missing,
+        });
         return Response.json(
           {
             error: "إعدادات تشغيل الموقع غير مكتملة.",
-            code: "MISSING_RUNTIME_SECRETS",
+            code: "MISSING_RUNTIME_CONFIGURATION",
             missing,
-            help: "أضف هذه القيم في إعدادات Worker ضمن Runtime Variables and Secrets لبيئة Production، ثم أعد النشر.",
+            help: "أضف HYPERDRIVE كـ binding، وأضف ADMIN_PASSWORD وSESSION_SECRET كـ Secrets في بيئة Production، ثم أعد النشر.",
           },
           { status: 503 },
         );
@@ -84,15 +87,17 @@ const worker = {
       try {
         const handler = await getApiHandler(
           env as Env & {
-            DATABASE_URL: string;
-            ADMIN_PASSWORD: string;
-            SESSION_SECRET: string;
+            HYPERDRIVE: { connectionString: string };
           },
         );
-        // Cloudflare Workers cannot safely reuse a global PostgreSQL pool
-        // across invocations; scope the pool and its cleanup to this request.
-        return await withRequestDatabase(() =>
-          handler.fetch(request, env, ctx),
+        // Scope the client pool to this request. Hyperdrive keeps its separate
+        // upstream database connections pooled across Worker invocations.
+        return await withRequestDatabase(
+          () => handler.fetch(request, env, ctx),
+          {
+            connectionString: hyperdriveConnectionString,
+            useConnectionStringAsIs: true,
+          },
         );
       } catch (error) {
         // Keep Cloudflare's generic Error 1101 page from hiding the real cause.
@@ -109,7 +114,11 @@ const worker = {
       }
     }
 
-    return env.ASSETS.fetch(request);
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response("Not found", { status: 404 });
   },
 };
 

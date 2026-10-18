@@ -5,9 +5,10 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-function createDatabaseContext() {
-  const databaseUrl = process.env.DATABASE_URL;
-
+function createDatabaseContext(
+  databaseUrl = process.env.DATABASE_URL,
+  useConnectionStringAsIs = false,
+) {
   if (!databaseUrl) {
     throw new Error(
       "DATABASE_URL must be set. Did you forget to provision a database?",
@@ -18,23 +19,32 @@ function createDatabaseContext() {
   // semantics; this matches Supabase's sslmode=require guidance. Do not also
   // pass `ssl: true` here: pg v8's current default verifies the chain and can
   // reject the Supabase pooler certificate in runtimes without its root CA.
-  const connectionUrl = new URL(databaseUrl);
-  if (!connectionUrl.searchParams.has("sslmode")) {
-    connectionUrl.searchParams.set("sslmode", "require");
-  }
-  // pg v8.23 treats sslmode=require as certificate verification unless its
-  // libpq-compatible mode is enabled. Set it only for `require`; preserve the
-  // stronger verification modes when an operator chose them.
-  if (
-    connectionUrl.searchParams.get("sslmode") === "require" &&
-    !connectionUrl.searchParams.has("uselibpqcompat")
-  ) {
-    connectionUrl.searchParams.set("uselibpqcompat", "true");
+  let connectionString = databaseUrl;
+  if (!useConnectionStringAsIs) {
+    const connectionUrl = new URL(databaseUrl);
+    if (!connectionUrl.searchParams.has("sslmode")) {
+      connectionUrl.searchParams.set("sslmode", "require");
+    }
+    // pg v8.23 treats sslmode=require as certificate verification unless its
+    // libpq-compatible mode is enabled. Set it only for `require`; preserve the
+    // stronger verification modes when an operator chose them.
+    if (
+      connectionUrl.searchParams.get("sslmode") === "require" &&
+      !connectionUrl.searchParams.has("uselibpqcompat")
+    ) {
+      connectionUrl.searchParams.set("uselibpqcompat", "true");
+    }
+    connectionString = connectionUrl.toString();
   }
 
   const pool = new Pool({
-    connectionString: connectionUrl.toString(),
+    connectionString,
     max: 1,
+    // A failed network connection must return promptly instead of keeping the
+    // storefront loading forever. A healthy Supabase connection completes in
+    // far less time than this limit.
+    connectionTimeoutMillis: 8_000,
+    idleTimeoutMillis: 10_000,
   });
 
   return { pool, db: drizzle(pool, { schema }) };
@@ -58,8 +68,15 @@ function getDatabaseContext(): DatabaseContext {
 /** Create a fresh database pool for one Cloudflare Worker request. */
 export async function withRequestDatabase<T>(
   operation: () => Promise<T>,
+  options: {
+    connectionString?: string;
+    useConnectionStringAsIs?: boolean;
+  } = {},
 ): Promise<T> {
-  const requestContext = createDatabaseContext();
+  const requestContext = createDatabaseContext(
+    options.connectionString,
+    options.useConnectionStringAsIs,
+  );
 
   return requestDatabaseContext.run(requestContext, async () => {
     try {

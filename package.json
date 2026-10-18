@@ -4,7 +4,9 @@
   "license": "MIT",
   "packageManager": "pnpm@10.11.1",
   "scripts": {
+    "dev": "node ./scripts/dev.mjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "build:pages": "pnpm --filter @workspace/islamic-book-bundle run build",
     "build:cloudflare": "node ./artifacts/islamic-book-bundle/node_modules/vite/bin/vite.js build --config ./artifacts/islamic-book-bundle/vite.config.ts",
     "deploy:cloudflare": "node ./artifacts/islamic-book-bundle/node_modules/vite/bin/vite.js build --config ./artifacts/islamic-book-bundle/vite.config.ts && node ./node_modules/wrangler/bin/wrangler.js deploy",
     "typecheck:libs": "tsc --build",

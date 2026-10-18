@@ -1,17 +1,11 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "khira",
-  "main": "artifacts/api-server/src/worker.ts",
+  "pages_build_output_dir": "./artifacts/islamic-book-bundle/dist/public",
   "compatibility_date": "2026-10-17",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
   },
-  "assets": {
-    "directory": "./artifacts/islamic-book-bundle/dist/public",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api", "/api/*"]
-  }
 }
