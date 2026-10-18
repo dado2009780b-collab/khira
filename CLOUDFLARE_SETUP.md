@@ -30,19 +30,31 @@
 
 | المتغير | النوع | الوصف |
 | :--- | :--- | :--- |
-| `DATABASE_URL` | **Secret** / Encrypted | رابط اتصال Supabase (**Transaction pooler** المنفذ `6543`) |
-| `ADMIN_PASSWORD` | **Secret** / Encrypted | كلمة مرور الدخول للوحة تحكم المدير `/admin` |
+| `HYPERDRIVE` | **Binding** | الموصى به: إعداد Hyperdrive مرتبط باتصال Supabase المباشر، باسم binding هو `HYPERDRIVE`. |
+| `DATABASE_URL` | **Secret** / Encrypted | بديل عن Hyperdrive: رابط Supabase **Transaction pooler** (المنفذ `6543`). لا تضفه عند استخدام binding باسم `HYPERDRIVE`. |
+| `ADMIN_PASSWORD` | **Secret** / Encrypted | كلمة مرور الدخول للوحة تحكم المدير `/admin` (12 حرفًا على الأقل) |
 | `SESSION_SECRET` | **Secret** / Encrypted | مفتاح تشفير الجلسات (سلسلة عشوائية لا تقل عن 32 حرفاً) |
 | `TELEGRAM_BOT_TOKEN` | **Secret** / Encrypted | *(اختياري)* توكن بوت تيليجرام لإشعارات الطلبات |
 | `TELEGRAM_CHAT_ID` | **Secret** / Encrypted | *(اختياري)* معرّف المحادثة أو القناة لاستقبال الطلبات |
 
 > [!IMPORTANT]
-> **رابط Supabase:** احرص على استخدام **Transaction pooler** (المنفذ `6543`) من لوحة Supabase (Project Settings → Database → Connection string → Transaction pooler).
-> تم تعديل الكود ليعمل مباشرة مع `DATABASE_URL` بدون الحاجة الإجبارية لخدمة Hyperdrive المدفوعة.
+> **طريقة الاتصال الموصى بها:** أنشئ Hyperdrive في Cloudflare واربطه باسم `HYPERDRIVE` في Pages، باستخدام اتصال Supabase المباشر ضمن إعداد Hyperdrive. إذا لم تستخدم Hyperdrive، استخدم `DATABASE_URL` مع **Transaction pooler** (المنفذ `6543`)، وليس الاتصال المباشر.
+>
+> تُضبط `HYPERDRIVE` من **Settings → Functions → Hyperdrive bindings**، بينما تضبط أسرار `DATABASE_URL` و`ADMIN_PASSWORD` و`SESSION_SECRET` ضمن **Variables and Secrets** لكل بيئة مستخدمة. أعد النشر بعد تغيير الإعدادات.
 
 ---
 
-## 3. إعدادات الدوال والتوافق (Functions & Compatibility)
+## 3. إعداد مخطط قاعدة البيانات
+
+قبل استخدام لوحة الإدارة، حدّث مخطط قاعدة البيانات ليطابق جداول المشروع. من مجلد المشروع المحلي، اضبط `DATABASE_URL` محليًا على قاعدة Supabase نفسها ثم شغّل:
+
+```bash
+pnpm --filter @workspace/db run push
+```
+
+هذا الأمر ينشئ الجداول والأعمدة المطلوبة ويحدّث المخطط الموجود. لا تشارك رابط الاتصال أو كلمة مرور قاعدة البيانات. بعد نجاحه، افحص `https://<your-project>.pages.dev/api/health`؛ يجب أن تكون النتيجة `{"status":"ok","database":"connected","requiredTables":"present"}`.
+
+## 4. إعدادات الدوال والتوافق (Functions & Compatibility)
 
 ملف `wrangler.json` في المشروع مُعد مسبقاً بالإعدادات التالية، ويمكنك التأكد منها من:
 **Settings** ← **Functions**:
@@ -51,7 +63,7 @@
 
 ---
 
-## 4. ميزات تم إعدادها تلقائياً لتفادي أي مشاكل
+## 5. ميزات تم إعدادها تلقائياً لتفادي أي مشاكل
 
 1. **دعم التوجيه أحادي الصفحة (SPA Routing):**
    - تم إنشاء ملف `_redirects` بحيث إذا قام الزائر بفتح أو تحديث صفحة `/admin`، لا تظهر له رسالة الخطأ `404 Not Found`، بل تفتح الصفحة بسلاسة.
@@ -62,7 +74,7 @@
 
 ---
 
-## 5. النشر اليدوي عبر موجه الأوامر (CLI)
+## 6. النشر اليدوي عبر موجه الأوامر (CLI)
 
 إذا كنت تفضل رفع المشروع مباشرة من حاسوبك باستخدام Wrangler:
 ```bash
@@ -76,10 +88,12 @@ npx wrangler pages deploy ./artifacts/islamic-book-bundle/dist/public --project-
 
 ---
 
-## 6. فحص حالة الموقع بعد النشر
+## 7. فحص حالة الموقع بعد النشر
 
 بعد اكتمال النشر، افتح الرابط التالي على موقعك:
 `https://<your-project>.pages.dev/api/health`
 
-- إذا كانت النتيجة `{"status":"ok"}`: فكل شيء يعمل بنجاح، والموقع متصل بقاعدة البيانات.
-- إذا ظهر `MISSING_RUNTIME_CONFIGURATION`: تأكد من إضافة `DATABASE_URL` و `ADMIN_PASSWORD` و `SESSION_SECRET` في إعدادات المتغيرات.
+- إذا كانت النتيجة `{"status":"ok","database":"connected","requiredTables":"present"}`: فالاتصال والمخطط جاهزان.
+- إذا ظهرت `database_schema_incomplete`: نفّذ تحديث المخطط الموضح أعلاه.
+- إذا ظهرت `database_unavailable`: راجع `errorCode` و`errorType`؛ تحقق من binding `HYPERDRIVE` أو سر `DATABASE_URL` واتصال Supabase.
+- إذا ظهر `MISSING_RUNTIME_CONFIGURATION`: تأكد من إضافة binding `HYPERDRIVE` أو سر `DATABASE_URL`، بالإضافة إلى `ADMIN_PASSWORD` و`SESSION_SECRET`، في بيئة النشر الصحيحة.

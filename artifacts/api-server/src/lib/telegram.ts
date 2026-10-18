@@ -114,7 +114,7 @@ export async function sendOrderNotification(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: config.chatId,
+        chat_id: activeConfig.chatId,
         text,
         parse_mode: "MarkdownV2",
       }),

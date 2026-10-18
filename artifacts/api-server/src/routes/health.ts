@@ -255,7 +255,7 @@ router.get("/health", async (_req, res) => {
         missingTables,
         missingColumns,
         missingOrderStatusValues,
-        help: "قاعدة البيانات متصلة، لكن بنيتها لا تطابق الموقع. أرسل قائمة الجداول والأعمدة الناقصة لنجهز لك إصلاح SQL المناسب.",
+        help: "قاعدة البيانات متصلة لكن مخططها غير مكتمل. حدّثه باستخدام pnpm --filter @workspace/db run push بعد ضبط DATABASE_URL محليًا.",
       });
       return;
     }
@@ -275,7 +275,7 @@ router.get("/health", async (_req, res) => {
       database: "unavailable",
       errorCode,
       errorType,
-      help: "تحقق من سر DATABASE_URL في إعدادات التشغيل، وأن رابط Supabase صحيح ويستخدم Transaction pooler على المنفذ 6543.",
+      help: "تحقق من إعداد HYPERDRIVE binding أو سر DATABASE_URL في Cloudflare، ومن صحة بيانات اتصال Supabase.",
     });
   }
 });

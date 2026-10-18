@@ -95,7 +95,7 @@ const worker = {
             error: "إعدادات تشغيل الموقع غير مكتملة.",
             code: "MISSING_RUNTIME_CONFIGURATION",
             missing,
-            help: "أضف DATABASE_URL (رابط اتصال Supabase Pooler) وADMIN_PASSWORD وSESSION_SECRET في إعدادات Cloudflare Pages تحت Settings -> Environment variables and secrets، ثم أعد النشر.",
+            help: "أضف HYPERDRIVE binding أو DATABASE_URL، مع ADMIN_PASSWORD وSESSION_SECRET، في إعدادات Cloudflare Pages ثم أعد النشر.",
           },
           { status: 503 },
         );

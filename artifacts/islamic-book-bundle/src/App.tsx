@@ -35,6 +35,20 @@ const messageFromError = (error: unknown, fallback: string) => {
   const e = error as { message?: string; data?: { error?: string }; response?: { data?: { error?: string } } };
   return e?.data?.error || e?.response?.data?.error || e?.message || fallback;
 };
+function adminErrorDetails(error: unknown) {
+  const e = error as {
+    data?: { error?: string; help?: string; missing?: unknown };
+    response?: { data?: { error?: string; help?: string; missing?: unknown } };
+  };
+  const data = e?.data ?? e?.response?.data;
+  return {
+    message: data?.error || messageFromError(error, 'تعذر التحقق من جلسة الإدارة.'),
+    help: data?.help,
+    missing: Array.isArray(data?.missing)
+      ? data.missing.filter((value): value is string => typeof value === 'string')
+      : [],
+  };
+}
 const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 font-bold transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-55';
 const primaryButton = `${button} bg-[#315b56] text-[#fffaf0] hover:bg-[#244945]`;
 const outlineButton = `${button} border border-[#c7cbb9] bg-[#fbfaf4] text-[#315b56] hover:bg-[#eef0e6]`;
@@ -79,39 +93,6 @@ function LoadingState({ label = 'جارٍ تحميل المعلومات…' }: {
     <div className="w-64 space-y-3"><div className="h-3 animate-pulse rounded-full bg-[#e5ddce]"/><div className="h-3 w-4/5 animate-pulse rounded-full bg-[#e5ddce]"/><div className="h-3 w-2/3 animate-pulse rounded-full bg-[#e5ddce]"/></div><span>{label}</span>
   </div>;
 }
-const FALLBACK_OFFER: Offer = {
-  title: 'كتابان.. ورحلة أعمق مع العلم والإيمان 📚',
-  description: 'خُذ خطوة نحو معرفة أعمق مع باقة تجمع بين كتابين مميزين من كتب التراث الإسلامي.',
-  closingText: 'كتابان.. معرفة تنفعك وأثر يبقى معاك.',
-  ctaText: 'اطلب الآن',
-  packageName: 'باقة كتاب الداء والدواء والرحيق المختوم',
-  price: 199,
-  deliveryFee: 0,
-  currency: 'د.ل.',
-  benefits: [
-    'كتابان مميزان في باقة واحدة.',
-    'السعر النهائي 199 دينارًا ليبيًا.',
-    'توصيل مجاني لجميع المدن الليبية.',
-  ],
-  books: [
-    {
-      id: 'dawa-wa-dawa',
-      title: 'الداء والدواء',
-      author: 'ابن قيم الجوزية',
-      description: 'كتاب يتناول أمراض القلوب وأسباب صلاح النفس، ويقدّم معاني إيمانية ودروسًا تساعدك على التأمل ومراجعة النفس.',
-      coverUrl: '/api/books/dawa-wa-dawa/cover',
-    },
-    {
-      id: 'alraheeq-almakhtoom',
-      title: 'الرحيق المختوم',
-      author: 'صفي الرحمن المباركفوري',
-      description: 'رحلة في السيرة النبوية، تتعرّف من خلالها على حياة النبي محمد ﷺ وأهم الأحداث والمواقف في سيرته العطرة.',
-      coverUrl: '/api/books/alraheeq-almakhtoom/cover',
-    },
-  ],
-  updatedAt: new Date(0).toISOString(),
-};
-
 function PublicError({ retry }: { retry: () => void }) {
   return <div className="mx-auto my-12 max-w-xl rounded-2xl border border-[#ddc8bb] bg-[#fbf5ef] p-8 text-center text-[#594439]" role="alert">
     <p className="font-bold">تعذّر تحميل تفاصيل العرض الآن.</p><p className="mt-2 text-sm">يرجى المحاولة مرة أخرى بعد قليل.</p><button onClick={retry} className={`${outlineButton} mt-5`}><RefreshCw size={16}/> إعادة المحاولة</button>
@@ -120,12 +101,15 @@ function PublicError({ retry }: { retry: () => void }) {
 function Home() {
   const query = useGetOffer({
     query: {
+      queryKey: getGetOfferQueryKey(),
       retry: 2,
       staleTime: 60_000,
       refetchOnWindowFocus: false,
     },
   });
-  const offer = query.data ?? FALLBACK_OFFER;
+  if (query.isError) return <PublicError retry={() => void query.refetch()}/>;
+  if (!query.data) return <LoadingState label="جارٍ تحميل تفاصيل العرض…"/>;
+  const offer = query.data;
 
   return <main id="top" dir="rtl" className="bundle-storefront overflow-hidden bg-[#fbfaf4] text-[#294a46]">
     <section className="bundle-hero paper-grain relative min-h-[760px]">
@@ -213,7 +197,7 @@ function OrderForm({ offer }: { offer: Offer }) {
     setFailure('');
     create.mutate({ data: { customerName: name.trim(), phone: phone.trim(), city: city.trim() } }, {
       onSuccess: r => { setReceipt({ orderNumber: r.orderNumber, totalAmount: r.totalAmount, currency: r.currency }); setName(''); setPhone(''); setCity(''); },
-      onError: () => setFailure('لم نتمكن من حفظ الطلب الآن. بياناتك محفوظة هنا، حاول الإرسال مرة أخرى.')
+      onError: error => setFailure(messageFromError(error, 'لم نتمكن من حفظ الطلب الآن. حاول الإرسال مرة أخرى.'))
     });
   };
   return <section id="order" className="scroll-mt-5 bg-[#e9eee5] px-5 py-20 md:py-28">
@@ -285,14 +269,17 @@ function AdminGate() {
     },
   });
   if (session.isLoading) return <div dir="rtl" className="min-h-[100dvh] bg-[#f4f0e6]"><LoadingState label="جارٍ التحقق من جلسة الإدارة…"/></div>;
-  if (session.isError) return <div dir="rtl" className="grid min-h-[100dvh] place-items-center bg-[#f4f0e6] p-5"><div role="alert" className="max-w-lg rounded-3xl border border-[#d9c9b8] bg-[#fbf6ee] p-9 text-center"><ShieldAlert className="mx-auto text-[#946747]" size={36}/><h1 className="mt-4 text-2xl font-extrabold">تعذر الاتصال بخدمة الإدارة</h1><p className="mt-2 leading-7 text-[#656e62]">لم نتمكن من التحقق من جلسة الإدارة.</p><button onClick={() => void session.refetch()} className={`${outlineButton} mt-6`}><RefreshCw size={15}/>إعادة المحاولة</button></div></div>;
+  if (session.isError) {
+    const details = adminErrorDetails(session.error);
+    return <div dir="rtl" className="grid min-h-[100dvh] place-items-center bg-[#f4f0e6] p-5"><div role="alert" className="max-w-lg rounded-3xl border border-[#d9c9b8] bg-[#fbf6ee] p-9 text-center"><ShieldAlert className="mx-auto text-[#946747]" size={36}/><h1 className="mt-4 text-2xl font-extrabold">تعذر الاتصال بخدمة الإدارة</h1><p className="mt-2 leading-7 text-[#656e62]">{details.message}</p>{details.missing.length > 0 && <p className="mt-2 text-sm text-[#656e62]">الإعدادات الناقصة: {details.missing.join('، ')}</p>}<p className="mt-2 text-sm leading-6 text-[#656e62]">{details.help || 'افحص حالة قاعدة البيانات من /api/health وسجلات Pages Functions في Cloudflare.'}</p><button onClick={() => void session.refetch()} className={`${outlineButton} mt-6`}><RefreshCw size={15}/>إعادة المحاولة</button></div></div>;
+  }
   if (!session.data?.configured) return <div dir="rtl" className="grid min-h-[100dvh] place-items-center bg-[#f4f0e6] p-5"><div role="alert" className="max-w-md rounded-3xl border border-[#d8ceba] bg-[#fbf7ed] p-9 text-center"><ShieldAlert className="mx-auto text-[#9b814d]" size={35}/><h1 className="mt-4 text-2xl font-extrabold">دخول الإدارة غير مهيّأ بعد</h1><p className="mt-2 leading-7 text-[#677064]">لم تُضبط كلمة مرور الإدارة لهذا الموقع بعد.</p><Link href="/" className={`${primaryButton} mt-6`}>العودة إلى الصفحة العامة</Link></div></div>;
   if (!session.data.authenticated) return <AdminPasswordLogin onLogin={() => {
     void client.invalidateQueries({ queryKey: getGetAdminSessionQueryKey() });
     void client.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
   }}/>;
   if (overview.isLoading || !overview.data) return <div dir="rtl" className="min-h-[100dvh] bg-[#f4f0e6]"><LoadingState label="جارٍ تحميل بيانات لوحة الإدارة…"/></div>;
-  if (overview.isError) return <div dir="rtl" className="grid min-h-[100dvh] place-items-center bg-[#f4f0e6] p-5"><div role="alert" className="max-w-lg rounded-3xl border border-[#d9c9b8] bg-[#fbf6ee] p-9 text-center"><ShieldAlert className="mx-auto text-[#946747]" size={36}/><h1 className="mt-4 text-2xl font-extrabold">تعذر تحميل بيانات الإدارة</h1><p className="mt-2 leading-7 text-[#656e62]">لم يتم عرض أي بيانات إدارية.</p><button onClick={() => void overview.refetch()} className={`${outlineButton} mt-6`}><RefreshCw size={15}/>إعادة المحاولة</button></div></div>;
+  if (overview.isError) return <div dir="rtl" className="grid min-h-[100dvh] place-items-center bg-[#f4f0e6] p-5"><div role="alert" className="max-w-lg rounded-3xl border border-[#d9c9b8] bg-[#fbf6ee] p-9 text-center"><ShieldAlert className="mx-auto text-[#946747]" size={36}/><h1 className="mt-4 text-2xl font-extrabold">تعذر تحميل بيانات الإدارة</h1><p className="mt-2 leading-7 text-[#656e62]">{messageFromError(overview.error, 'تعذر تحميل بيانات الإدارة.')}</p><p className="mt-2 text-sm leading-6 text-[#656e62]">افحص /api/health وسجلات Pages Functions في Cloudflare.</p><button onClick={() => void overview.refetch()} className={`${outlineButton} mt-6`}><RefreshCw size={15}/>إعادة المحاولة</button></div></div>;
   return <AdminWorkspace overview={overview.data}/>;
 }
 
@@ -508,7 +495,7 @@ function StatusSelect({order,onChanged}:{order:AdminOrder;onChanged:()=>void}) {
   const mutation=useUpdateAdminOrder();const [error,setError]=useState('');
   return <div><select aria-label={`حالة الطلب ${order.orderNumber}`} value={order.status} disabled={mutation.isPending} onChange={e=>{
     const next=e.target.value as OrderStatus; if(next===order.status)return; setError('');
-    mutation.mutate({orderId:order.id,data:{status:next}},{onSuccess:onChanged,onError:()=>setError('تعذّر تحديث الحالة')});
+    mutation.mutate({orderId:order.id,data:{status:next}},{onSuccess:onChanged,onError:error=>setError(messageFromError(error,'تعذّر تحديث الحالة'))});
   }} className="h-9 max-w-36 rounded-full border border-[#d8cfbd] bg-[#f5f0e5] px-3 text-xs font-semibold"><option value={order.status}>{statusNames[order.status]}</option>{statusList.filter(s=>s!==order.status).map(s=><option key={s} value={s}>{statusNames[s]}</option>)}</select>{error&&<span role="alert" className="block text-[10px] text-red-800">{error}</span>}</div>;
 }
 function OrderDetails({id,onClose,onChanged}:{id:number;onClose:()=>void;onChanged:()=>void}) {
@@ -524,7 +511,7 @@ function OrderDetails({id,onClose,onChanged}:{id:number;onClose:()=>void;onChang
         return <div className="space-y-6 py-6">
           <div className="grid grid-cols-2 gap-3">{[['اسم العميل',o.customerName],['الهاتف',o.phone],['المدينة',o.city],['المنتج',o.productName],['الكمية',o.quantity],['سعر الوحدة',money(o.unitPrice)],['رسوم التوصيل',money(o.deliveryFee)],['الإجمالي',money(o.totalAmount)],['تاريخ الإنشاء',dateText(o.createdAt)],['آخر تحديث',dateText(o.updatedAt)]].map(([k,v])=><div key={String(k)} className="rounded-xl bg-[#eee8da] p-3"><p className="text-[11px] text-[#797a6e]">{k}</p><p className="mt-1 break-words text-sm font-bold">{v}</p></div>)}</div>
           <div><label className="mb-2 block text-sm font-bold">تغيير الحالة</label><StatusSelect order={o} onChanged={()=>{onChanged();void query.refetch();}}/></div>
-          <div><label className="mb-2 block text-sm font-bold">ملاحظات الإدارة</label><textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={4} maxLength={5000} className="w-full rounded-xl border border-[#d8cfbd] bg-[#fffdf7] p-3 text-sm" placeholder="أضف ملاحظات داخلية…"/><button disabled={update.isPending} onClick={()=>{setMessage('');update.mutate({orderId:o.id,data:{adminNotes:notes}},{onSuccess:()=>{setMessage('تم حفظ الملاحظات.');onChanged();void query.refetch();},onError:()=>setMessage('تعذّر حفظ الملاحظات.')});}} className={`${primaryButton} mt-3 min-h-10 px-4 text-sm`}>{update.isPending?'جارٍ الحفظ…':'حفظ الملاحظات'}</button>{message&&<p role="status" className="mt-2 text-sm">{message}</p>}</div>
+          <div><label className="mb-2 block text-sm font-bold">ملاحظات الإدارة</label><textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={4} maxLength={5000} className="w-full rounded-xl border border-[#d8cfbd] bg-[#fffdf7] p-3 text-sm" placeholder="أضف ملاحظات داخلية…"/><button disabled={update.isPending} onClick={()=>{setMessage('');update.mutate({orderId:o.id,data:{adminNotes:notes}},{onSuccess:()=>{setMessage('تم حفظ الملاحظات.');onChanged();void query.refetch();},onError:error=>setMessage(messageFromError(error,'تعذّر حفظ الملاحظات.'))});}} className={`${primaryButton} mt-3 min-h-10 px-4 text-sm`}>{update.isPending?'جارٍ الحفظ…':'حفظ الملاحظات'}</button>{message&&<p role="status" className="mt-2 text-sm">{message}</p>}</div>
           <div><h3 className="font-bold">سجل تغييرات الحالة</h3>{query.data.history.length? <ol className="mt-3 space-y-3 border-r border-[#cfc4ac] pr-4">{query.data.history.map(h=><li key={h.id} className="relative text-sm"><span className="absolute -right-[21px] top-1.5 size-2 rounded-full bg-[#9b804d]"/><b>{h.previousStatus?statusNames[h.previousStatus]+' ← ':''}{statusNames[h.newStatus]}</b><time className="mt-1 block text-xs text-[#7b7c70]">{dateText(h.createdAt)}</time></li>)}</ol>:<p className="mt-2 text-sm text-[#73776b]">لا يوجد سجل تغييرات.</p>}</div>
         </div>;
       })()}
@@ -542,7 +529,7 @@ function ContentPanel() {
     title:form.title,description:form.description,closingText:form.closingText,ctaText:form.ctaText,
     price:Number(form.price),deliveryFee:Number(form.deliveryFee),packageName:form.packageName,benefits:form.benefits,
     books:form.books.map(({id,title,author,description})=>({id,title,author,description}))
-  }},{onSuccess:(newOffer)=>{client.setQueryData(getGetOfferQueryKey(),newOffer);setForm(newOffer);setFeedback('تم حفظ محتوى العرض.');},onError:()=>setFailure('تعذّر حفظ التغييرات. راجع البيانات وحاول مرة أخرى.')});};
+  }},{onSuccess:(newOffer)=>{client.setQueryData(getGetOfferQueryKey(),newOffer);setForm(newOffer);setFeedback('تم حفظ محتوى العرض.');},onError:error=>setFailure(messageFromError(error,'تعذّر حفظ التغييرات. راجع البيانات وحاول مرة أخرى.'))});};
   const setBook=(id:string,key:'title'|'author'|'description',value:string)=>edit('books',form.books.map(b=>b.id===id?{...b,[key]:value}:b));
   return <section id="content">
     <div className="mb-6"><h2 className="text-2xl font-extrabold">إدارة محتوى العرض</h2><p className="mt-1 text-sm text-[#6c7367]">عدّل النصوص والتسعير وأغلفة الكتابين. تحفظ التغييرات على العرض المنشور.</p></div>
@@ -597,7 +584,7 @@ function BookManagement({book,onChange}:{book:Offer['books'][number];onChange:(i
     if(!window.confirm('هل تريد حذف صورة الغلاف الحالية؟'))return;
     setFailure('');setMessage('');
     try{const updated=await remove.mutateAsync({bookId:book.id});client.setQueryData(getGetOfferQueryKey(),(old:Offer|undefined)=>old?{...old,books:old.books.map(b=>b.id===updated.id?updated:b)}:old);void client.invalidateQueries({queryKey:getGetOfferQueryKey()});setFile(null);setMessage('تم حذف صورة الغلاف.');}
-    catch{setFailure('تعذّر حذف صورة الغلاف. حاول مرة أخرى.');}
+    catch(error){setFailure(messageFromError(error,'تعذّر حذف صورة الغلاف. حاول مرة أخرى.'));}
   };
   const busy=uploading||remove.isPending;
   return <article className="rounded-2xl border border-[#ded5c4] bg-[#fbf8f0] p-5 md:p-7">
