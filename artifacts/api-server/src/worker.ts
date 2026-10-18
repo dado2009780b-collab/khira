@@ -21,25 +21,6 @@ interface HttpHandler {
   fetch(request: Request, env: Env, ctx: WorkerContext): Promise<Response>;
 }
 
-function getSafeInitializationErrorCode(error: unknown): string {
-  if (typeof error !== "object" || error === null) return "UNKNOWN";
-
-  const candidate = error as { code?: unknown; name?: unknown };
-  if (
-    typeof candidate.code === "string" &&
-    /^[A-Za-z0-9_]{2,64}$/.test(candidate.code)
-  ) {
-    return candidate.code.toUpperCase();
-  }
-  if (
-    typeof candidate.name === "string" &&
-    /^[A-Za-z][A-Za-z0-9]{0,39}$/.test(candidate.name)
-  ) {
-    return candidate.name.toUpperCase();
-  }
-  return "UNKNOWN";
-}
-
 let apiHandler: Promise<HttpHandler> | undefined;
 
 function getApiHandler(): Promise<HttpHandler> {
@@ -49,12 +30,36 @@ function getApiHandler(): Promise<HttpHandler> {
     // Pages Function request. It avoids manually reserving a port in Pages.
     return httpServerHandler(createServer(app)) as HttpHandler;
   })().catch((error: unknown) => {
-    // Do not poison this isolate with a permanently rejected initialization.
     apiHandler = undefined;
     throw error;
   });
 
   return apiHandler;
+}
+
+function getSafeInitializationErrorCode(error: unknown): string {
+  if (typeof error !== "object" || error === null) return "UNKNOWN";
+
+  const candidate = error as { code?: unknown; name?: unknown; message?: unknown };
+  if (
+    typeof candidate.code === "string" &&
+    /^[A-Za-z0-9_]{2,64}$/.test(candidate.code)
+  ) {
+    return candidate.code.toUpperCase();
+  }
+  if (
+    typeof candidate.message === "string" &&
+    /http\.createServer is not implemented/i.test(candidate.message)
+  ) {
+    return "NODE_HTTP_SERVER_MODULES_UNAVAILABLE";
+  }
+  if (
+    typeof candidate.name === "string" &&
+    /^[A-Za-z][A-Za-z0-9]{0,39}$/.test(candidate.name)
+  ) {
+    return candidate.name.toUpperCase();
+  }
+  return "UNKNOWN";
 }
 
 const worker = {
@@ -132,7 +137,10 @@ const worker = {
             error: "تعذر تشغيل واجهة الموقع.",
             code: "API_INITIALIZATION_FAILED",
             errorCode,
-            help: "افتح Workers & Pages → khira → Observability → Logs لقراءة سبب الخطأ، من دون مشاركة أي أسرار.",
+            help:
+              errorCode === "NODE_HTTP_SERVER_MODULES_UNAVAILABLE"
+                ? "إعداد توافق Node.js غير مفعّل في Cloudflare Pages. فعّل Build system V2 وأعد النشر باستخدام ملف wrangler.jsonc الموجود بالمشروع."
+                : "افتح Workers & Pages → khira → Observability → Logs لقراءة سبب الخطأ، من دون مشاركة أي أسرار.",
           },
           { status: 503 },
         );

@@ -18,6 +18,7 @@
    - `NODE_VERSION`: `20`
    - `PNPM_VERSION`: `10.11.1`
 5. اضغط **Save and Deploy**.
+6. من **Settings → Builds & deployments** تأكد أن **Build system** مضبوط على **Version 2**؛ ملف `wrangler.jsonc` يعتمد عليه لتطبيق إعدادات Pages Functions.
 
 ---
 
@@ -56,10 +57,13 @@ pnpm --filter @workspace/db run push
 
 ## 4. إعدادات الدوال والتوافق (Functions & Compatibility)
 
-ملف `wrangler.json` في المشروع مُعد مسبقاً بالإعدادات التالية، ويمكنك التأكد منها من:
-**Settings** ← **Functions**:
-- **Compatibility flag:** `nodejs_compat` و `enable_nodejs_http_server_modules`
-- **Compatibility date:** `2024-11-01` أو أحدث.
+ملف `wrangler.jsonc` في جذر المشروع هو مصدر إعدادات Pages Functions، ويضبط توافق Node.js المطلوب لخادم API. بعد تفعيل Build system V2، ادفع الملف إلى الفرع المتصل بـ Cloudflare أو أنشئ نشرًا جديدًا ليتم تطبيق إعداداته.
+
+إذا كان المشروع لا يستخدم ملف Wrangler كمصدر للإعدادات، اضبط يدويًا من **Settings → Functions → Compatibility flags**:
+- **Compatibility date:** `2026-10-18` أو أحدث.
+- **Compatibility flags:** `nodejs_compat` و `enable_nodejs_http_server_modules`.
+
+غياب دعم وحدات خادم HTTP في Pages يمنع تشغيل API ويظهر في `/api/health` كـ `NODE_HTTP_SERVER_MODULES_UNAVAILABLE`.
 
 ---
 

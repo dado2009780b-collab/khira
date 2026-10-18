@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "khira",
   "pages_build_output_dir": "./artifacts/islamic-book-bundle/dist/public",
-  "compatibility_date": "2024-11-01",
+  "compatibility_date": "2026-10-18",
   "compatibility_flags": [
     "nodejs_compat",
     "enable_nodejs_http_server_modules"

@@ -93,9 +93,10 @@ function LoadingState({ label = 'جارٍ تحميل المعلومات…' }: {
     <div className="w-64 space-y-3"><div className="h-3 animate-pulse rounded-full bg-[#e5ddce]"/><div className="h-3 w-4/5 animate-pulse rounded-full bg-[#e5ddce]"/><div className="h-3 w-2/3 animate-pulse rounded-full bg-[#e5ddce]"/></div><span>{label}</span>
   </div>;
 }
-function PublicError({ retry }: { retry: () => void }) {
+function PublicError({ error, retry }: { error: unknown; retry: () => void }) {
+  const details = adminErrorDetails(error);
   return <div className="mx-auto my-12 max-w-xl rounded-2xl border border-[#ddc8bb] bg-[#fbf5ef] p-8 text-center text-[#594439]" role="alert">
-    <p className="font-bold">تعذّر تحميل تفاصيل العرض الآن.</p><p className="mt-2 text-sm">يرجى المحاولة مرة أخرى بعد قليل.</p><button onClick={retry} className={`${outlineButton} mt-5`}><RefreshCw size={16}/> إعادة المحاولة</button>
+    <p className="font-bold">تعذّر تحميل تفاصيل العرض الآن.</p><p className="mt-2 text-sm">{details.message}</p>{details.help && <p className="mt-2 text-sm leading-6">{details.help}</p>}<button onClick={retry} className={`${outlineButton} mt-5`}><RefreshCw size={16}/> إعادة المحاولة</button>
   </div>;
 }
 function Home() {
@@ -107,7 +108,7 @@ function Home() {
       refetchOnWindowFocus: false,
     },
   });
-  if (query.isError) return <PublicError retry={() => void query.refetch()}/>;
+  if (query.isError) return <PublicError error={query.error} retry={() => void query.refetch()}/>;
   if (!query.data) return <LoadingState label="جارٍ تحميل تفاصيل العرض…"/>;
   const offer = query.data;
 
@@ -524,7 +525,7 @@ function ContentPanel() {
   const [form,setForm]=useState<Offer|null>(null);const [feedback,setFeedback]=useState('');const [failure,setFailure]=useState('');
   useEffect(()=>{if(query.data&&!form)setForm(query.data);},[query.data,form]);
   const edit=(key:keyof Offer,value:unknown)=>setForm(current=>current?({...current,[key]:value} as Offer):current);
-  if(query.isLoading||!form) return query.isError?<PublicError retry={()=>void query.refetch()}/>:<LoadingState label="جارٍ تحميل محتوى العرض…"/>;
+  if(query.isLoading||!form) return query.isError?<PublicError error={query.error} retry={()=>void query.refetch()}/>:<LoadingState label="جارٍ تحميل محتوى العرض…"/>;
   const save=()=>{setFeedback('');setFailure('');update.mutate({data:{
     title:form.title,description:form.description,closingText:form.closingText,ctaText:form.ctaText,
     price:Number(form.price),deliveryFee:Number(form.deliveryFee),packageName:form.packageName,benefits:form.benefits,
