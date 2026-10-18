@@ -39,12 +39,14 @@ function createDatabaseContext(
 
   const pool = new Pool({
     connectionString,
-    max: 1,
-    // A failed network connection must return promptly instead of keeping the
-    // storefront loading forever. A healthy Supabase connection completes in
-    // far less time than this limit.
-    connectionTimeoutMillis: 8_000,
-    idleTimeoutMillis: 10_000,
+    max: 10,
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
+  });
+
+  // Catch idle client errors so they do not crash the Node or Worker process
+  pool.on("error", (err) => {
+    console.warn("Unexpected error on idle database client", err);
   });
 
   return { pool, db: drizzle(pool, { schema }) };

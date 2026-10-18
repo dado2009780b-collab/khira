@@ -64,47 +64,73 @@ export function ensureDefaultOffer(): Promise<void> {
 }
 
 export async function getOfferPayload() {
-  const [offer] = await db
-    .select()
-    .from(offerSettingsTable)
-    .where(eq(offerSettingsTable.id, 1))
-    .limit(1);
-  const books = await db
-    .select({
-      id: bookContentTable.id,
-      title: bookContentTable.title,
-      author: bookContentTable.author,
-      description: bookContentTable.description,
-      hasCover: sql<boolean>`${bookContentTable.coverData} IS NOT NULL`,
-      coverUpdatedAt: bookContentTable.coverUpdatedAt,
-    })
-    .from(bookContentTable);
+  try {
+    const [offer] = await db
+      .select()
+      .from(offerSettingsTable)
+      .where(eq(offerSettingsTable.id, 1))
+      .limit(1);
+    const books = await db
+      .select({
+        id: bookContentTable.id,
+        title: bookContentTable.title,
+        author: bookContentTable.author,
+        description: bookContentTable.description,
+        hasCover: sql<boolean>`${bookContentTable.coverData} IS NOT NULL`,
+        coverUpdatedAt: bookContentTable.coverUpdatedAt,
+      })
+      .from(bookContentTable);
 
-  const offerContent = offer ?? DEFAULT_OFFER;
+    const offerContent = offer ?? DEFAULT_OFFER;
 
-  return {
-    title: offerContent.title,
-    description: offerContent.description,
-    closingText: offerContent.closingText,
-    ctaText: offerContent.ctaText,
-    price: offerContent.price,
-    deliveryFee: offerContent.deliveryFee,
-    currency: offerContent.currency,
-    packageName: offerContent.packageName,
-    benefits: offerContent.benefits,
-    books: BOOK_IDS.map((id) => {
-      const book = books.find((item) => item.id === id);
-      const defaultBook = DEFAULT_BOOKS.find((item) => item.id === id)!;
-      return {
-        id,
-        title: book?.title ?? defaultBook.title,
-        author: book?.author ?? defaultBook.author,
-        description: book?.description ?? defaultBook.description,
-        coverUrl: book?.hasCover
-          ? `/api/books/${id}/cover?v=${book.coverUpdatedAt?.getTime() ?? 0}`
-          : null,
-      };
-    }),
-    updatedAt: offer?.updatedAt ?? new Date(0),
-  };
+    return {
+      title: offerContent.title,
+      description: offerContent.description,
+      closingText: offerContent.closingText,
+      ctaText: offerContent.ctaText,
+      price: offerContent.price,
+      deliveryFee: offerContent.deliveryFee,
+      currency: offerContent.currency,
+      packageName: offerContent.packageName,
+      benefits: offerContent.benefits,
+      books: BOOK_IDS.map((id) => {
+        const book = books.find((item) => item.id === id);
+        const defaultBook = DEFAULT_BOOKS.find((item) => item.id === id)!;
+        return {
+          id,
+          title: book?.title ?? defaultBook.title,
+          author: book?.author ?? defaultBook.author,
+          description: book?.description ?? defaultBook.description,
+          coverUrl: book?.hasCover
+            ? `/api/books/${id}/cover?v=${book.coverUpdatedAt?.getTime() ?? 0}`
+            : null,
+        };
+      }),
+      updatedAt: offer?.updatedAt ?? new Date(0),
+    };
+  } catch (error) {
+    console.warn("Database unavailable in getOfferPayload, serving DEFAULT_OFFER gracefully:", error);
+    return {
+      title: DEFAULT_OFFER.title,
+      description: DEFAULT_OFFER.description,
+      closingText: DEFAULT_OFFER.closingText,
+      ctaText: DEFAULT_OFFER.ctaText,
+      price: DEFAULT_OFFER.price,
+      deliveryFee: DEFAULT_OFFER.deliveryFee,
+      currency: DEFAULT_OFFER.currency,
+      packageName: DEFAULT_OFFER.packageName,
+      benefits: DEFAULT_OFFER.benefits,
+      books: BOOK_IDS.map((id) => {
+        const defaultBook = DEFAULT_BOOKS.find((item) => item.id === id)!;
+        return {
+          id,
+          title: defaultBook.title,
+          author: defaultBook.author,
+          description: defaultBook.description,
+          coverUrl: null,
+        };
+      }),
+      updatedAt: new Date(0),
+    };
+  }
 }

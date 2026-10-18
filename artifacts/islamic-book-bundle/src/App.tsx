@@ -79,16 +79,54 @@ function LoadingState({ label = 'جارٍ تحميل المعلومات…' }: {
     <div className="w-64 space-y-3"><div className="h-3 animate-pulse rounded-full bg-[#e5ddce]"/><div className="h-3 w-4/5 animate-pulse rounded-full bg-[#e5ddce]"/><div className="h-3 w-2/3 animate-pulse rounded-full bg-[#e5ddce]"/></div><span>{label}</span>
   </div>;
 }
+const FALLBACK_OFFER: Offer = {
+  title: 'كتابان.. ورحلة أعمق مع العلم والإيمان 📚',
+  description: 'خُذ خطوة نحو معرفة أعمق مع باقة تجمع بين كتابين مميزين من كتب التراث الإسلامي.',
+  closingText: 'كتابان.. معرفة تنفعك وأثر يبقى معاك.',
+  ctaText: 'اطلب الآن',
+  packageName: 'باقة كتاب الداء والدواء والرحيق المختوم',
+  price: 199,
+  deliveryFee: 0,
+  currency: 'د.ل.',
+  benefits: [
+    'كتابان مميزان في باقة واحدة.',
+    'السعر النهائي 199 دينارًا ليبيًا.',
+    'توصيل مجاني لجميع المدن الليبية.',
+  ],
+  books: [
+    {
+      id: 'dawa-wa-dawa',
+      title: 'الداء والدواء',
+      author: 'ابن قيم الجوزية',
+      description: 'كتاب يتناول أمراض القلوب وأسباب صلاح النفس، ويقدّم معاني إيمانية ودروسًا تساعدك على التأمل ومراجعة النفس.',
+      coverUrl: '/api/books/dawa-wa-dawa/cover',
+    },
+    {
+      id: 'alraheeq-almakhtoom',
+      title: 'الرحيق المختوم',
+      author: 'صفي الرحمن المباركفوري',
+      description: 'رحلة في السيرة النبوية، تتعرّف من خلالها على حياة النبي محمد ﷺ وأهم الأحداث والمواقف في سيرته العطرة.',
+      coverUrl: '/api/books/alraheeq-almakhtoom/cover',
+    },
+  ],
+  updatedAt: new Date(0).toISOString(),
+};
+
 function PublicError({ retry }: { retry: () => void }) {
   return <div className="mx-auto my-12 max-w-xl rounded-2xl border border-[#ddc8bb] bg-[#fbf5ef] p-8 text-center text-[#594439]" role="alert">
     <p className="font-bold">تعذّر تحميل تفاصيل العرض الآن.</p><p className="mt-2 text-sm">يرجى المحاولة مرة أخرى بعد قليل.</p><button onClick={retry} className={`${outlineButton} mt-5`}><RefreshCw size={16}/> إعادة المحاولة</button>
   </div>;
 }
 function Home() {
-  const query = useGetOffer();
-  const offer = query.data;
-  if (query.isLoading) return <main dir="rtl" className="bundle-storefront min-h-[100dvh] bg-[#fbfaf4]"><Header/><div className="mx-auto max-w-5xl px-5 pt-36"><LoadingState/></div></main>;
-  if (query.isError || !offer) return <main dir="rtl" className="bundle-storefront min-h-[100dvh] bg-[#fbfaf4]"><Header/><div className="pt-28"><PublicError retry={() => void query.refetch()}/></div></main>;
+  const query = useGetOffer({
+    query: {
+      retry: 2,
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    },
+  });
+  const offer = query.data ?? FALLBACK_OFFER;
+
   return <main id="top" dir="rtl" className="bundle-storefront overflow-hidden bg-[#fbfaf4] text-[#294a46]">
     <section className="bundle-hero paper-grain relative min-h-[760px]">
       <Header/>
