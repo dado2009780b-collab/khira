@@ -3,12 +3,14 @@ $workspace = Split-Path -Parent $MyInvocation.MyCommand.Path
 $apiDirectory = Join-Path $workspace 'artifacts\api-server'
 $webDirectory = Join-Path $workspace 'artifacts\islamic-book-bundle'
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
-
-if (-not $nodeCommand) {
+$cachedNode = Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
+if ($nodeCommand) {
+  $nodeExecutable = $nodeCommand.Source
+} elseif (Test-Path $cachedNode) {
+  $nodeExecutable = $cachedNode
+} else {
   throw 'Node.js is not available. Install Node.js, restart Windows Terminal, then run this file again.'
 }
-
-$nodeExecutable = $nodeCommand.Source
 $ports = @(5000, 5173)
 $owners = [System.Collections.Generic.HashSet[int]]::new()
 
