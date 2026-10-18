@@ -12,7 +12,7 @@
  *  - The bot token is intentionally redacted from every log line.
  */
 
-import { logger } from "./logger.js";
+import { logger, type AppLogger } from "./logger.js";
 
 const TELEGRAM_API_BASE = "https://api.telegram.org";
 
@@ -99,7 +99,7 @@ function escapeMarkdown(text: string): string {
 export async function sendOrderNotification(
   payload: OrderNotificationPayload,
   /** Pass req.log so errors are correlated with the request. */
-  requestLogger: typeof logger,
+  requestLogger: AppLogger,
 ): Promise<boolean> {
   if (!config) {
     // Already warned at startup; don't spam logs per-request.

@@ -5,7 +5,7 @@ The API uses Supabase PostgreSQL through Drizzle. Book cover image bytes are sto
 ## Create the project
 
 1. Create a Supabase project and save its database password somewhere private.
-2. In Project Settings → Database → Connect, copy the PostgreSQL connection string. Prefer the **Session pooler** string for this app, and keep `sslmode=require` if it appears in the copied string. Use the exact host, username, and port Supabase shows for your project.
+2. In Project Settings → Database → Connect, copy the PostgreSQL connection string and keep `sslmode=require` if it appears in the copied string. For the deployed Cloudflare Worker, use Supabase's **Transaction pooler** connection (port `6543`), which is intended for serverless applications. For local development, the **Session pooler** (port `5432`) also works. Use the exact host and username Supabase shows for your project.
 3. Copy `.env.example` to `.env` and replace the placeholder values. Never commit `.env` or share its database password.
 4. Create the schema either by running the prepared SQL once in Supabase SQL Editor, or by running `pnpm --filter @workspace/db run push`. Do not use both methods on a partially created schema. The API reads `DATABASE_URL` from the root `.env` file and connects to that Supabase database.
 5. Start the API with `pnpm --filter @workspace/api-server run dev`, then start the website in a second terminal with `pnpm --filter @workspace/islamic-book-bundle run dev`. Place a test order, verify it appears in the admin dashboard and Customers section, then upload and display a book cover.
