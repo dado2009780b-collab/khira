@@ -5,5 +5,11 @@
   "compatibility_date": "2026-10-18",
   "compatibility_flags": [
     "nodejs_compat"
+  ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "24002675650e446e85a0aab9627041d3"
+    }
   ]
 }

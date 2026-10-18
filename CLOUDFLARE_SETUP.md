@@ -31,17 +31,17 @@
 
 | المتغير | النوع | الوصف |
 | :--- | :--- | :--- |
-| `HYPERDRIVE` | **Binding** | الموصى به: إعداد Hyperdrive مرتبط باتصال Supabase المباشر، باسم binding هو `HYPERDRIVE`. |
-| `DATABASE_URL` | **Secret** / Encrypted | بديل عن Hyperdrive: رابط Supabase **Transaction pooler** (المنفذ `6543`). لا تضفه عند استخدام binding باسم `HYPERDRIVE`. |
+| `HYPERDRIVE` | **Binding في `wrangler.jsonc`** | الربط الموصى به لاتصال Supabase المباشر. يضبط المشروع اسم binding ومعرّف Hyperdrive في ملف Wrangler، لا من لوحة Pages. |
+| `DATABASE_URL` | **Secret** / Encrypted | بديل عن Hyperdrive: رابط Supabase **Transaction pooler** (المنفذ `6543`). |
 | `ADMIN_PASSWORD` | **Secret** / Encrypted | كلمة مرور الدخول للوحة تحكم المدير `/admin` (12 حرفًا على الأقل) |
 | `SESSION_SECRET` | **Secret** / Encrypted | مفتاح تشفير الجلسات (سلسلة عشوائية لا تقل عن 32 حرفاً) |
 | `TELEGRAM_BOT_TOKEN` | **Secret** / Encrypted | *(اختياري)* توكن بوت تيليجرام لإشعارات الطلبات |
 | `TELEGRAM_CHAT_ID` | **Secret** / Encrypted | *(اختياري)* معرّف المحادثة أو القناة لاستقبال الطلبات |
 
 > [!IMPORTANT]
-> **طريقة الاتصال الموصى بها:** أنشئ Hyperdrive في Cloudflare واربطه باسم `HYPERDRIVE` في Pages، باستخدام اتصال Supabase المباشر ضمن إعداد Hyperdrive. إذا لم تستخدم Hyperdrive، استخدم `DATABASE_URL` مع **Transaction pooler** (المنفذ `6543`)، وليس الاتصال المباشر.
+> **طريقة الاتصال الموصى بها لهذا المشروع:** أنشئ إعداد Hyperdrive في Cloudflare باستخدام اتصال Supabase المباشر، ثم أضف معرّفه ضمن `hyperdrive` في `wrangler.jsonc` باسم binding هو `HYPERDRIVE`. ملف Wrangler هو مصدر إعدادات Pages Functions؛ لذلك ستعرض لوحة Pages تنبيهًا بأن bindings تُدار عبر ملف Wrangler، وهذا متوقع. إذا لم تستخدم Hyperdrive، استخدم `DATABASE_URL` مع **Transaction pooler** (المنفذ `6543`)، وليس الاتصال المباشر.
 >
-> تُضبط `HYPERDRIVE` من **Settings → Functions → Hyperdrive bindings**، بينما تضبط أسرار `DATABASE_URL` و`ADMIN_PASSWORD` و`SESSION_SECRET` ضمن **Variables and Secrets** لكل بيئة مستخدمة. أعد النشر بعد تغيير الإعدادات.
+> يضبط المشروع binding `HYPERDRIVE` ومعرّفه في `wrangler.jsonc`. تضبط أسرار `DATABASE_URL` و`ADMIN_PASSWORD` و`SESSION_SECRET` ضمن **Variables and Secrets** لكل بيئة مستخدمة. أعد النشر بعد تغيير الإعدادات.
 
 ---
 
