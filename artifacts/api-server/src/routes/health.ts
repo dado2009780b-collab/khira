@@ -4,6 +4,22 @@ import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
 
+function getSafeDatabaseErrorCode(error: unknown, depth = 0): string {
+  if (depth > 2 || typeof error !== "object" || error === null) {
+    return "UNKNOWN_DATABASE_ERROR";
+  }
+
+  const candidate = error as { code?: unknown; cause?: unknown };
+  if (
+    typeof candidate.code === "string" &&
+    /^[A-Z0-9_]{2,64}$/.test(candidate.code)
+  ) {
+    return candidate.code;
+  }
+
+  return getSafeDatabaseErrorCode(candidate.cause, depth + 1);
+}
+
 router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
   res.json(data);
@@ -51,13 +67,19 @@ router.get("/health", async (_req, res) => {
       return;
     }
 
-    res.json({ status: "ok", database: "connected", requiredTables: "present" });
+    res.json({
+      status: "ok",
+      database: "connected",
+      requiredTables: "present",
+    });
   } catch (error) {
-    // Deliberately avoid exposing host names, credentials, or driver internals.
-    console.error("Database health check failed", error);
+    // Expose only a safe driver error code; never return connection details.
+    const errorCode = getSafeDatabaseErrorCode(error);
+    console.error("Database health check failed", { errorCode });
     res.status(503).json({
       status: "database_unavailable",
       database: "unavailable",
+      errorCode,
       help: "تحقق من سر DATABASE_URL في إعدادات التشغيل، وأن رابط Supabase صحيح ويستخدم Transaction pooler على المنفذ 6543.",
     });
   }
