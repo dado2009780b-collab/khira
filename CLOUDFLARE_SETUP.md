@@ -61,9 +61,9 @@ pnpm --filter @workspace/db run push
 
 إذا كان المشروع لا يستخدم ملف Wrangler كمصدر للإعدادات، اضبط يدويًا من **Settings → Functions → Compatibility flags**:
 - **Compatibility date:** `2026-10-18` أو أحدث.
-- **Compatibility flags:** `nodejs_compat` و `enable_nodejs_http_server_modules`.
+- **Compatibility flags:** `nodejs_compat` و `enable_nodejs_http_modules` و `enable_nodejs_http_server_modules`.
 
-غياب دعم وحدات خادم HTTP في Pages يمنع تشغيل API ويظهر في `/api/health` كـ `NODE_HTTP_SERVER_MODULES_UNAVAILABLE`.
+يتطلب خادم API دعم وحدات HTTP العميلة والخادمية في Node.js. غياب أي من رايتي HTTP يمنع تشغيل API وقد يظهر في `/api/health` كـ `NODE_HTTP_SERVER_MODULES_UNAVAILABLE`. عند اعتماد ملف Wrangler، تأكد من استخدام Build system V2 ليتم تطبيق الرايات على النشر.
 
 ---
 

@@ -139,7 +139,7 @@ const worker = {
             errorCode,
             help:
               errorCode === "NODE_HTTP_SERVER_MODULES_UNAVAILABLE"
-                ? "إعداد توافق Node.js غير مفعّل في Cloudflare Pages. فعّل Build system V2 وأعد النشر باستخدام ملف wrangler.jsonc الموجود بالمشروع."
+                ? "دعم وحدات Node.js HTTP غير مفعّل بالكامل في Cloudflare Pages. فعّل Build system V2 وتأكد من رايات nodejs_compat وenable_nodejs_http_modules وenable_nodejs_http_server_modules ثم أعد النشر."
                 : "افتح Workers & Pages → khira → Observability → Logs لقراءة سبب الخطأ، من دون مشاركة أي أسرار.",
           },
           { status: 503 },
