@@ -4,6 +4,10 @@
   "main": "artifacts/api-server/src/worker.ts",
   "compatibility_date": "2026-10-17",
   "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   "assets": {
     "directory": "./artifacts/islamic-book-bundle/dist/public",
     "binding": "ASSETS",
