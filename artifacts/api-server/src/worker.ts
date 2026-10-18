@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { httpServerHandler } from "cloudflare:node";
+import { withRequestDatabase } from "@workspace/db";
 
 interface Env {
   DATABASE_URL?: string;
@@ -51,16 +52,24 @@ function getApiHandler(env: Env): Promise<HttpHandler> {
 }
 
 const worker = {
-  async fetch(request: Request, env: Env, ctx: WorkerContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: WorkerContext,
+  ): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path === "/api" || path.startsWith("/api/")) {
-      const missing = (["DATABASE_URL", "ADMIN_PASSWORD", "SESSION_SECRET"] as const)
-        .filter((key) => !env[key]?.trim());
+      const missing = (
+        ["DATABASE_URL", "ADMIN_PASSWORD", "SESSION_SECRET"] as const
+      ).filter((key) => !env[key]?.trim());
 
       if (missing.length > 0) {
-        console.error("Worker runtime configuration is missing required secrets", {
-          missing,
-        });
+        console.error(
+          "Worker runtime configuration is missing required secrets",
+          {
+            missing,
+          },
+        );
         return Response.json(
           {
             error: "إعدادات تشغيل الموقع غير مكتملة.",
@@ -73,12 +82,18 @@ const worker = {
       }
 
       try {
-        const handler = await getApiHandler(env as Env & {
-          DATABASE_URL: string;
-          ADMIN_PASSWORD: string;
-          SESSION_SECRET: string;
-        });
-        return await handler.fetch(request, env, ctx);
+        const handler = await getApiHandler(
+          env as Env & {
+            DATABASE_URL: string;
+            ADMIN_PASSWORD: string;
+            SESSION_SECRET: string;
+          },
+        );
+        // Cloudflare Workers cannot safely reuse a global PostgreSQL pool
+        // across invocations; scope the pool and its cleanup to this request.
+        return await withRequestDatabase(() =>
+          handler.fetch(request, env, ctx),
+        );
       } catch (error) {
         // Keep Cloudflare's generic Error 1101 page from hiding the real cause.
         // Never return environment values or a connection string to the browser.

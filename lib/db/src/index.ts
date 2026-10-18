@@ -1,42 +1,91 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
 
 const { Pool } = pg;
 
-const databaseUrl = process.env.DATABASE_URL;
+function createDatabaseContext() {
+  const databaseUrl = process.env.DATABASE_URL;
 
-if (!databaseUrl) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+  if (!databaseUrl) {
+    throw new Error(
+      "DATABASE_URL must be set. Did you forget to provision a database?",
+    );
+  }
+
+  // Supabase requires TLS. Require an encrypted connection using libpq
+  // semantics; this matches Supabase's sslmode=require guidance. Do not also
+  // pass `ssl: true` here: pg v8's current default verifies the chain and can
+  // reject the Supabase pooler certificate in runtimes without its root CA.
+  const connectionUrl = new URL(databaseUrl);
+  if (!connectionUrl.searchParams.has("sslmode")) {
+    connectionUrl.searchParams.set("sslmode", "require");
+  }
+  // pg v8.23 treats sslmode=require as certificate verification unless its
+  // libpq-compatible mode is enabled. Set it only for `require`; preserve the
+  // stronger verification modes when an operator chose them.
+  if (
+    connectionUrl.searchParams.get("sslmode") === "require" &&
+    !connectionUrl.searchParams.has("uselibpqcompat")
+  ) {
+    connectionUrl.searchParams.set("uselibpqcompat", "true");
+  }
+
+  const pool = new Pool({
+    connectionString: connectionUrl.toString(),
+    max: 1,
+  });
+
+  return { pool, db: drizzle(pool, { schema }) };
 }
 
-// Supabase requires TLS, but its pooler certificate chain is not trusted by
-// every Node/Workers runtime. Require an encrypted connection using libpq
-// semantics; this matches Supabase's sslmode=require guidance. Do not also pass
-// `ssl: true` here: pg v8's current default verifies the chain and rejects the
-// Supabase pooler certificate in runtimes without its root CA.
-const connectionUrl = new URL(databaseUrl);
-if (!connectionUrl.searchParams.has("sslmode")) {
-  connectionUrl.searchParams.set("sslmode", "require");
-}
-// pg v8.23 treats sslmode=require as certificate verification unless its
-// libpq-compatible mode is enabled. Set that compatibility only for `require`;
-// preserve the stronger verification modes when an operator chose them.
-if (
-  connectionUrl.searchParams.get("sslmode") === "require" &&
-  !connectionUrl.searchParams.has("uselibpqcompat")
-) {
-  connectionUrl.searchParams.set("uselibpqcompat", "true");
+type DatabaseContext = ReturnType<typeof createDatabaseContext>;
+
+const requestDatabaseContext = new AsyncLocalStorage<DatabaseContext>();
+let localDatabaseContext: DatabaseContext | undefined;
+
+function getDatabaseContext(): DatabaseContext {
+  const requestContext = requestDatabaseContext.getStore();
+  if (requestContext) return requestContext;
+
+  // The persistent Node server used during local development keeps its normal
+  // process-wide pool. Cloudflare Workers instead use withRequestDatabase().
+  localDatabaseContext ??= createDatabaseContext();
+  return localDatabaseContext;
 }
 
-// Keep one connection per warm Worker isolate; Supabase's pooler shares the
-// underlying database connections across isolates.
-export const pool = new Pool({
-  connectionString: connectionUrl.toString(),
-  max: 1,
-});
-export const db = drizzle(pool, { schema });
+/** Create a fresh database pool for one Cloudflare Worker request. */
+export async function withRequestDatabase<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const requestContext = createDatabaseContext();
+
+  return requestDatabaseContext.run(requestContext, async () => {
+    try {
+      return await operation();
+    } finally {
+      await requestContext.pool.end();
+    }
+  });
+}
+
+// Database access stays compatible with existing route imports while each
+// Worker invocation receives its own pool through AsyncLocalStorage.
+export const pool = new Proxy({} as DatabaseContext["pool"], {
+  get(_target, property) {
+    const requestPool = getDatabaseContext().pool;
+    const value = Reflect.get(requestPool, property, requestPool);
+    return typeof value === "function" ? value.bind(requestPool) : value;
+  },
+}) as DatabaseContext["pool"];
+
+export const db = new Proxy({} as DatabaseContext["db"], {
+  get(_target, property) {
+    const requestDb = getDatabaseContext().db;
+    const value = Reflect.get(requestDb, property, requestDb);
+    return typeof value === "function" ? value.bind(requestDb) : value;
+  },
+}) as DatabaseContext["db"];
 
 export * from "./schema";
