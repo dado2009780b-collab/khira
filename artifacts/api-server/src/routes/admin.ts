@@ -195,7 +195,13 @@ router.get("/admin/customers", async (req, res): Promise<void> => {
       orderCount: count(ordersTable.id),
     })
     .from(customersTable)
-    .leftJoin(ordersTable, eq(ordersTable.customerId, customersTable.id))
+    .leftJoin(
+      ordersTable,
+      or(
+        eq(ordersTable.customerId, customersTable.id),
+        eq(ordersTable.phone, customersTable.phone),
+      )!,
+    )
     .groupBy(customersTable.id)
     .orderBy(desc(customersTable.updatedAt))
     .limit(100);
@@ -220,7 +226,12 @@ router.get("/admin/customers/:customerId", async (req, res): Promise<void> => {
   const orders = await db
     .select()
     .from(ordersTable)
-    .where(eq(ordersTable.customerId, customerId))
+    .where(
+      or(
+        eq(ordersTable.customerId, customerId),
+        eq(ordersTable.phone, customer.phone),
+      ),
+    )
     .orderBy(desc(ordersTable.createdAt));
   res.json({ customer, orders: orders.map(toAdminOrder) });
 });
