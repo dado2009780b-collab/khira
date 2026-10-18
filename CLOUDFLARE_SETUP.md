@@ -43,6 +43,8 @@
 >
 > يضبط المشروع binding `HYPERDRIVE` ومعرّفه في `wrangler.jsonc`. تضبط أسرار `DATABASE_URL` و`ADMIN_PASSWORD` و`SESSION_SECRET` ضمن **Variables and Secrets** لكل بيئة مستخدمة. أعد النشر بعد تغيير الإعدادات.
 
+> **إشعارات Telegram:** لإرسال إشعار بعد حفظ كل طلب، أضف `TELEGRAM_BOT_TOKEN` و`TELEGRAM_CHAT_ID` كـ **Secrets** في بيئة **Production** ضمن **Settings → Variables and Secrets**. ضع توكن البوت الذي أنشأته عبر BotFather ومعرّف المحادثة التي بدأ فيها البوت محادثةً معك. لا تضع هذه القيم في ملفات الواجهة أو في GitHub. بعد الحفظ، أعد النشر؛ ينتظر API نتيجة Telegram بعد حفظ الطلب، ويسجل فشل الإشعار دون إلغاء الطلب.
+
 ---
 
 ## 3. إعداد مخطط قاعدة البيانات

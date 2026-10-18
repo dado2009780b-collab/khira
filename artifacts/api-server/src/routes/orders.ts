@@ -130,8 +130,8 @@ router.post("/orders", createOrderLimiter, async (req, res): Promise<void> => {
   const orderNumber = `BK-${String(result.orderNumber).padStart(6, "0")}`;
   req.log.info({ orderId: result.id, orderNumber }, "Customer order saved");
 
-  // Fire-and-forget: Telegram failure must never prevent the order response.
-  void sendOrderNotification(
+  // Await delivery so Pages does not terminate the request before Telegram responds.
+  await sendOrderNotification(
     {
       orderNumber,
       customerName: result.customerName,

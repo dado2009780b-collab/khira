@@ -103,6 +103,13 @@ export async function sendOrderNotification(
 ): Promise<boolean> {
   const activeConfig = getConfig();
   if (!activeConfig) {
+    requestLogger.warn(
+      {
+        tokenConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim()),
+        chatConfigured: Boolean(process.env.TELEGRAM_CHAT_ID?.trim()),
+      },
+      "Telegram notification skipped because its runtime configuration is incomplete.",
+    );
     return false;
   }
 
