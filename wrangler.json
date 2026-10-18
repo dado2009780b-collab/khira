@@ -3,7 +3,10 @@
   "name": "khira",
   "pages_build_output_dir": "./artifacts/islamic-book-bundle/dist/public",
   "compatibility_date": "2026-10-17",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "enable_nodejs_http_server_modules"
+  ],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
