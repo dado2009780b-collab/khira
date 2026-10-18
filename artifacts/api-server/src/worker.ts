@@ -4,6 +4,7 @@ import { withRequestDatabase } from "@workspace/db";
 
 interface Env {
   HYPERDRIVE?: { connectionString: string };
+  DATABASE_URL?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
   ADMIN_PASSWORD?: string;
   SESSION_SECRET?: string;
@@ -41,24 +42,8 @@ function getSafeInitializationErrorCode(error: unknown): string {
 
 let apiHandler: Promise<HttpHandler> | undefined;
 
-function getApiHandler(
-  env: Env & { HYPERDRIVE: { connectionString: string } },
-): Promise<HttpHandler> {
+function getApiHandler(): Promise<HttpHandler> {
   apiHandler ??= (async () => {
-    // Initialize the existing Express app after Worker secrets are available.
-    // Hyperdrive owns the long-lived database pool. Local development reads
-    // DATABASE_URL through the separate Node server entrypoint.
-    process.env.DATABASE_URL = env.HYPERDRIVE.connectionString;
-    process.env.PORT = "3000";
-    process.env.ADMIN_PASSWORD = env.ADMIN_PASSWORD;
-    process.env.SESSION_SECRET = env.SESSION_SECRET;
-    if (env.TELEGRAM_BOT_TOKEN) {
-      process.env.TELEGRAM_BOT_TOKEN = env.TELEGRAM_BOT_TOKEN;
-    }
-    if (env.TELEGRAM_CHAT_ID) {
-      process.env.TELEGRAM_CHAT_ID = env.TELEGRAM_CHAT_ID;
-    }
-
     const { default: app } = await import("./app");
     // Passing the server directly lets Cloudflare attach it to the current
     // Pages Function request. It avoids manually reserving a port in Pages.
@@ -80,12 +65,25 @@ const worker = {
   ): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path === "/api" || path.startsWith("/api/")) {
-      const hyperdriveConnectionString = env.HYPERDRIVE?.connectionString;
-      const missing: string[] = ["ADMIN_PASSWORD", "SESSION_SECRET"].filter(
-        (key) => !env[key as "ADMIN_PASSWORD" | "SESSION_SECRET"]?.trim(),
-      );
-      if (!hyperdriveConnectionString) {
-        missing.unshift("HYPERDRIVE");
+      const connectionString =
+        env.HYPERDRIVE?.connectionString ||
+        env.DATABASE_URL?.trim() ||
+        process.env.DATABASE_URL?.trim();
+
+      const adminPassword =
+        env.ADMIN_PASSWORD?.trim() || process.env.ADMIN_PASSWORD?.trim();
+      const sessionSecret =
+        env.SESSION_SECRET?.trim() || process.env.SESSION_SECRET?.trim();
+
+      const missing: string[] = [];
+      if (!connectionString) {
+        missing.push("DATABASE_URL (أو Hyperdrive binding)");
+      }
+      if (!adminPassword) {
+        missing.push("ADMIN_PASSWORD");
+      }
+      if (!sessionSecret) {
+        missing.push("SESSION_SECRET");
       }
 
       if (missing.length > 0) {
@@ -97,32 +95,38 @@ const worker = {
             error: "إعدادات تشغيل الموقع غير مكتملة.",
             code: "MISSING_RUNTIME_CONFIGURATION",
             missing,
-            help: "أضف HYPERDRIVE كـ binding، وأضف ADMIN_PASSWORD وSESSION_SECRET كـ Secrets في بيئة Production، ثم أعد النشر.",
+            help: "أضف DATABASE_URL (رابط اتصال Supabase Pooler) وADMIN_PASSWORD وSESSION_SECRET في إعدادات Cloudflare Pages تحت Settings -> Environment variables and secrets، ثم أعد النشر.",
           },
           { status: 503 },
         );
       }
 
+      // Propagate runtime values to process.env so imported modules (auth, db, telegram) can read them
+      if (adminPassword) process.env.ADMIN_PASSWORD = adminPassword;
+      if (sessionSecret) process.env.SESSION_SECRET = sessionSecret;
+      if (connectionString) process.env.DATABASE_URL = connectionString;
+      if (env.TELEGRAM_BOT_TOKEN?.trim()) {
+        process.env.TELEGRAM_BOT_TOKEN = env.TELEGRAM_BOT_TOKEN.trim();
+      }
+      if (env.TELEGRAM_CHAT_ID?.trim()) {
+        process.env.TELEGRAM_CHAT_ID = env.TELEGRAM_CHAT_ID.trim();
+      }
+
       try {
-        const handler = await getApiHandler(
-          env as Env & {
-            HYPERDRIVE: { connectionString: string };
-          },
-        );
-        // Scope the client pool to this request. Hyperdrive keeps its separate
-        // upstream database connections pooled across Worker invocations.
+        const handler = await getApiHandler();
+        const isHyperdrive = Boolean(env.HYPERDRIVE?.connectionString);
         return await withRequestDatabase(
           () => handler.fetch(request, env, ctx),
           {
-            connectionString: hyperdriveConnectionString,
-            useConnectionStringAsIs: true,
+            connectionString,
+            useConnectionStringAsIs: isHyperdrive,
           },
         );
       } catch (error) {
         // Keep Cloudflare's generic Error 1101 page from hiding the real cause.
         // Never return environment values or a connection string to the browser.
         const errorCode = getSafeInitializationErrorCode(error);
-        console.error("Worker API initialization failed", { errorCode });
+        console.error("Worker API initialization failed", { errorCode, error });
         return Response.json(
           {
             error: "تعذر تشغيل واجهة الموقع.",

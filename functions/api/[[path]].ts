@@ -2,6 +2,7 @@ import worker from "../../artifacts/api-server/src/worker";
 
 type RuntimeEnvironment = {
   HYPERDRIVE?: { connectionString: string };
+  DATABASE_URL?: string;
   ADMIN_PASSWORD?: string;
   SESSION_SECRET?: string;
   TELEGRAM_BOT_TOKEN?: string;

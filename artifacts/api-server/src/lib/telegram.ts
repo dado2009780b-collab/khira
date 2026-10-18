@@ -101,13 +101,13 @@ export async function sendOrderNotification(
   /** Pass req.log so errors are correlated with the request. */
   requestLogger: AppLogger,
 ): Promise<boolean> {
-  if (!config) {
-    // Already warned at startup; don't spam logs per-request.
+  const activeConfig = getConfig();
+  if (!activeConfig) {
     return false;
   }
 
   const text = buildMessage(payload);
-  const url = `${TELEGRAM_API_BASE}/bot${config.token}/sendMessage`;
+  const url = `${TELEGRAM_API_BASE}/bot${activeConfig.token}/sendMessage`;
 
   try {
     const response = await fetch(url, {

@@ -1,41 +1,85 @@
-# تشغيل الموقع على Cloudflare Workers
+# تشغيل الموقع على Cloudflare Pages
 
-هذا المشروع يحتاج إلى Worker لواجهة API وإلى ملفات الواجهة المبنية. لذلك يجب أن يكون نوع المشروع **Workers**، وأن تُستخدم إعدادات Wrangler الموجودة في `wrangler.jsonc`.
+تم تجهيز هذا المشروع بالكامل ليعمل على **Cloudflare Pages** مع ميزات Full-Stack (الواجهة الثابتة CDN + وظائف الـ API عبر Pages Functions).
 
-## إعداد Cloudflare Workers Builds
+---
 
-في إعدادات البناء للمستودع:
+## 1. الطريقة الأولى: الربط المباشر مع GitHub (موصى بها)
 
-- **Build command:** `pnpm run build:cloudflare`
-- **Deploy command:** `pnpm exec wrangler deploy`
-- **Preview command:** `pnpm exec wrangler dev`
-- **Root directory:** اتركه فارغًا ليستخدم مجلد المستودع الرئيسي.
+من لوحة تحكم Cloudflare:
+1. اذهب إلى **Workers & Pages** ← اضغط **Create application** ← اختر تبويب **Pages**.
+2. اختر **Connect to Git** وحدد مستودع المشروع (Repository).
+3. اضبط إعدادات البناء (**Build configuration**):
+   - **Framework preset:** `None`
+   - **Build command:** `pnpm run build:cloudflare` (أو `npm run build:cloudflare`)
+   - **Build output directory:** `artifacts/islamic-book-bundle/dist/public`
+   - **Root directory:** اتركه فارغاً `/`
+4. في قسم **Environment variables (Advanced)** أثناء الإنشاء:
+   - `NODE_VERSION`: `20`
+   - `PNPM_VERSION`: `10.11.1`
+5. اضغط **Save and Deploy**.
 
-نسخة pnpm محددة في `package.json` لتتوافق مع ملف القفل، ويطلب `.npmrc` من pnpm التبديل إليها تلقائيًا. إذا كانت إعدادات المشروع في Cloudflare تحتوي متغير `PNPM_VERSION` يدويًا، اجعله `10.11.1`.
+---
 
-## ربط Supabase بقاعدة البيانات
+## 2. إضافة المتغيرات والأسرار (Environment Variables & Secrets)
 
-يستخدم Worker اتصال PostgreSQL من خلال `pg` ويقرأ رابط الاتصال من سر اسمه `DATABASE_URL`. لبيئة Workers استخدم **Transaction pooler** من Supabase (المنفذ `6543`).
+من لوحة تحكم المشروع في Cloudflare:
+**Workers & Pages** ← اسم مشروعك ← **Settings** ← **Environment variables** (أو **Variables and Secrets**):
 
-من Supabase اختر **Connect → Transaction pooler** وانسخ رابط الاتصال، عادةً يكون على المنفذ `6543`. هذا مناسب لطلبات Worker القصيرة، ويتفادى اعتماد الموقع على Hyperdrive. ألصق الرابط كاملًا في Cloudflare كـ Secret، ولا تضعه في GitHub أو ملف إعداد Wrangler. إذا كانت كلمة المرور تحتوي رموزًا خاصة، انسخ الرابط من Supabase مع ترميز كلمة المرور كما يعرضها الاتصال.
+أضف القيم التالية لبيئة **Production** (ولبيئة **Preview** إذا أردت):
 
-## إضافة الأسرار
+| المتغير | النوع | الوصف |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | **Secret** / Encrypted | رابط اتصال Supabase (**Transaction pooler** المنفذ `6543`) |
+| `ADMIN_PASSWORD` | **Secret** / Encrypted | كلمة مرور الدخول للوحة تحكم المدير `/admin` |
+| `SESSION_SECRET` | **Secret** / Encrypted | مفتاح تشفير الجلسات (سلسلة عشوائية لا تقل عن 32 حرفاً) |
+| `TELEGRAM_BOT_TOKEN` | **Secret** / Encrypted | *(اختياري)* توكن بوت تيليجرام لإشعارات الطلبات |
+| `TELEGRAM_CHAT_ID` | **Secret** / Encrypted | *(اختياري)* معرّف المحادثة أو القناة لاستقبال الطلبات |
 
-من إعدادات Worker في Cloudflare أضف هذه القيم كـ **Secrets** (لا تضعها في GitHub):
+> [!IMPORTANT]
+> **رابط Supabase:** احرص على استخدام **Transaction pooler** (المنفذ `6543`) من لوحة Supabase (Project Settings → Database → Connection string → Transaction pooler).
+> تم تعديل الكود ليعمل مباشرة مع `DATABASE_URL` بدون الحاجة الإجبارية لخدمة Hyperdrive المدفوعة.
 
-- `ADMIN_PASSWORD` — كلمة مرور إدارة طويلة.
-- `SESSION_SECRET` — سر جلسة عشوائي لا يقل عن 32 حرفًا.
-- `DATABASE_URL` — رابط Supabase **Transaction pooler** الكامل، وعادةً يكون المنفذ `6543`، ويُحفظ كـ Secret.
-- `TELEGRAM_BOT_TOKEN` و`TELEGRAM_CHAT_ID` — اختياريان لإشعارات الطلبات.
+---
 
-مهم: إعدادات **Build variables and secrets** ليست إعدادات التشغيل. أضف الأسرار من **Workers & Pages → khira → Settings → Variables and Secrets → Runtime variables and secrets**، واختر بيئة **Production** ثم **Add variable**، وحدد النوع **Secret**. أضف `DATABASE_URL` و`ADMIN_PASSWORD` و`SESSION_SECRET` (والاختياريين `TELEGRAM_BOT_TOKEN` و`TELEGRAM_CHAT_ID`)، ثم احفظ وأعد النشر. إذا كنت تستخدم المعاينة فأضفها أيضًا لبيئة Preview.
+## 3. إعدادات الدوال والتوافق (Functions & Compatibility)
 
-بعد النشر افتح `https://khira.ly/api/health`:
-- `status: ok` يعني أن Worker اتصل بقاعدة البيانات والجداول الأساسية موجودة.
-- `MISSING_RUNTIME_SECRETS` يعني أن الأسرار لم تُضف في Runtime لبيئة Production.
-- `database_unavailable` يعني أن رابط الاتصال أو بياناته أو المنفذ بحاجة إلى تصحيح.
-- `database_schema_incomplete` يعرض أسماء الجداول الناقصة.
+ملف `wrangler.json` في المشروع مُعد مسبقاً بالإعدادات التالية، ويمكنك التأكد منها من:
+**Settings** ← **Functions**:
+- **Compatibility flag:** `nodejs_compat` و `enable_nodejs_http_server_modules`
+- **Compatibility date:** `2024-11-01` أو أحدث.
 
-## أوامر البناء والنشر
+---
 
-Cloudflare Workers Builds يشغّل أوامر البناء والنشر أعلاه تلقائيًا عند وصول تحديث إلى الفرع المتصل. للتشغيل يدويًا من جهازك بعد تسجيل الدخول إلى Wrangler: `pnpm run deploy:cloudflare`.
+## 4. ميزات تم إعدادها تلقائياً لتفادي أي مشاكل
+
+1. **دعم التوجيه أحادي الصفحة (SPA Routing):**
+   - تم إنشاء ملف `_redirects` بحيث إذا قام الزائر بفتح أو تحديث صفحة `/admin`، لا تظهر له رسالة الخطأ `404 Not Found`، بل تفتح الصفحة بسلاسة.
+2. **توجيه الـ API المباشر (`_routes.json`):**
+   - تم إنشاء ملف `_routes.json` لضمان توجيه مسارات `/api/*` فقط إلى Functions، بينما يتم تقديم جميع الصور والملفات الثابتة والأيقونات من شبكة Cloudflare CDN مباشرة وفائقة السرعة ومجاناً.
+3. **توافق كامل مع Node.js في Worker:**
+   - تم ضبط اتصال قاعدة البيانات وتشفير كلمات المرور (`scrypt`) وتوليد الجلسات لتعمل بتوافق كامل مع بيئة Cloudflare Pages Functions.
+
+---
+
+## 5. النشر اليدوي عبر موجه الأوامر (CLI)
+
+إذا كنت تفضل رفع المشروع مباشرة من حاسوبك باستخدام Wrangler:
+```bash
+# بناء ونشر المشروع على Cloudflare Pages
+pnpm run deploy:pages
+```
+أو عبر الأمر المباشر:
+```bash
+npx wrangler pages deploy ./artifacts/islamic-book-bundle/dist/public --project-name khira
+```
+
+---
+
+## 6. فحص حالة الموقع بعد النشر
+
+بعد اكتمال النشر، افتح الرابط التالي على موقعك:
+`https://<your-project>.pages.dev/api/health`
+
+- إذا كانت النتيجة `{"status":"ok"}`: فكل شيء يعمل بنجاح، والموقع متصل بقاعدة البيانات.
+- إذا ظهر `MISSING_RUNTIME_CONFIGURATION`: تأكد من إضافة `DATABASE_URL` و `ADMIN_PASSWORD` و `SESSION_SECRET` في إعدادات المتغيرات.

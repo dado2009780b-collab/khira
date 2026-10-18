@@ -8,7 +8,8 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "build:pages": "pnpm --filter @workspace/islamic-book-bundle run build",
     "build:cloudflare": "node ./artifacts/islamic-book-bundle/node_modules/vite/bin/vite.js build --config ./artifacts/islamic-book-bundle/vite.config.ts",
-    "deploy:cloudflare": "node ./artifacts/islamic-book-bundle/node_modules/vite/bin/vite.js build --config ./artifacts/islamic-book-bundle/vite.config.ts && node ./node_modules/wrangler/bin/wrangler.js deploy",
+    "deploy:cloudflare": "node ./artifacts/islamic-book-bundle/node_modules/vite/bin/vite.js build --config ./artifacts/islamic-book-bundle/vite.config.ts && node ./node_modules/wrangler/bin/wrangler.js pages deploy ./artifacts/islamic-book-bundle/dist/public",
+    "deploy:pages": "node ./artifacts/islamic-book-bundle/node_modules/vite/bin/vite.js build --config ./artifacts/islamic-book-bundle/vite.config.ts && node ./node_modules/wrangler/bin/wrangler.js pages deploy ./artifacts/islamic-book-bundle/dist/public",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
