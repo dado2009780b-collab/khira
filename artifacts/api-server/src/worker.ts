@@ -20,6 +20,25 @@ interface HttpHandler {
   fetch(request: Request, env: Env, ctx: WorkerContext): Promise<Response>;
 }
 
+function getSafeInitializationErrorCode(error: unknown): string {
+  if (typeof error !== "object" || error === null) return "UNKNOWN";
+
+  const candidate = error as { code?: unknown; name?: unknown };
+  if (
+    typeof candidate.code === "string" &&
+    /^[A-Za-z0-9_]{2,64}$/.test(candidate.code)
+  ) {
+    return candidate.code.toUpperCase();
+  }
+  if (
+    typeof candidate.name === "string" &&
+    /^[A-Za-z][A-Za-z0-9]{0,39}$/.test(candidate.name)
+  ) {
+    return candidate.name.toUpperCase();
+  }
+  return "UNKNOWN";
+}
+
 let apiHandler: Promise<HttpHandler> | undefined;
 
 function getApiHandler(
@@ -41,9 +60,9 @@ function getApiHandler(
     }
 
     const { default: app } = await import("./app");
-    const server = createServer(app);
-    server.listen(3000);
-    return httpServerHandler({ port: 3000 }) as HttpHandler;
+    // Passing the server directly lets Cloudflare attach it to the current
+    // Pages Function request. It avoids manually reserving a port in Pages.
+    return httpServerHandler(createServer(app)) as HttpHandler;
   })().catch((error: unknown) => {
     // Do not poison this isolate with a permanently rejected initialization.
     apiHandler = undefined;
@@ -102,11 +121,13 @@ const worker = {
       } catch (error) {
         // Keep Cloudflare's generic Error 1101 page from hiding the real cause.
         // Never return environment values or a connection string to the browser.
-        console.error("Worker API initialization failed", error);
+        const errorCode = getSafeInitializationErrorCode(error);
+        console.error("Worker API initialization failed", { errorCode });
         return Response.json(
           {
             error: "تعذر تشغيل واجهة الموقع.",
             code: "API_INITIALIZATION_FAILED",
+            errorCode,
             help: "افتح Workers & Pages → khira → Observability → Logs لقراءة سبب الخطأ، من دون مشاركة أي أسرار.",
           },
           { status: 503 },
