@@ -1,10 +1,7 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { eq } from "drizzle-orm";
-import {
-  CreateOrderBody,
-  CreateOrderResponse,
-} from "@workspace/api-zod";
+import { CreateOrderBody, CreateOrderResponse } from "@workspace/api-zod";
 import {
   db,
   customersTable,
@@ -12,7 +9,7 @@ import {
   orderHistoryTable,
   ordersTable,
 } from "@workspace/db";
-import { ensureDefaultOffer } from "../lib/bookBundleContent.js";
+import { DEFAULT_OFFER } from "../lib/bookBundleContent.js";
 import { sendOrderNotification } from "../lib/telegram.js";
 
 const router: IRouter = Router();
@@ -41,15 +38,15 @@ function normalizePhone(value: string): string | null {
 }
 
 router.post("/orders", createOrderLimiter, async (req, res): Promise<void> => {
-  const source =
-    req.body && typeof req.body === "object" ? req.body : {};
+  const source = req.body && typeof req.body === "object" ? req.body : {};
   const parsed = CreateOrderBody.safeParse({
     ...source,
     customerName:
       typeof source.customerName === "string"
         ? source.customerName.trim()
         : source.customerName,
-    phone: typeof source.phone === "string" ? source.phone.trim() : source.phone,
+    phone:
+      typeof source.phone === "string" ? source.phone.trim() : source.phone,
     city: typeof source.city === "string" ? source.city.trim() : source.city,
   });
   if (!parsed.success) {
@@ -64,8 +61,7 @@ router.post("/orders", createOrderLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-  await ensureDefaultOffer();
-  const [offer] = await db
+  const [storedOffer] = await db
     .select({
       price: offerSettingsTable.price,
       deliveryFee: offerSettingsTable.deliveryFee,
@@ -75,10 +71,7 @@ router.post("/orders", createOrderLimiter, async (req, res): Promise<void> => {
     .from(offerSettingsTable)
     .where(eq(offerSettingsTable.id, 1))
     .limit(1);
-
-  if (!offer) {
-    throw new Error("Offer settings are missing");
-  }
+  const offer = storedOffer ?? DEFAULT_OFFER;
 
   const totalAmount = offer.price + offer.deliveryFee;
   const result = await db.transaction(async (tx) => {
@@ -135,10 +128,7 @@ router.post("/orders", createOrderLimiter, async (req, res): Promise<void> => {
   });
 
   const orderNumber = `BK-${String(result.orderNumber).padStart(6, "0")}`;
-  req.log.info(
-    { orderId: result.id, orderNumber },
-    "Customer order saved",
-  );
+  req.log.info({ orderId: result.id, orderNumber }, "Customer order saved");
 
   // Fire-and-forget: Telegram failure must never prevent the order response.
   void sendOrderNotification(

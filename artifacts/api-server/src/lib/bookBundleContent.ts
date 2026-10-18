@@ -1,10 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db, bookContentTable, offerSettingsTable } from "@workspace/db";
 
-export const BOOK_IDS = [
-  "dawa-wa-dawa",
-  "alraheeq-almakhtoom",
-] as const;
+export const BOOK_IDS = ["dawa-wa-dawa", "alraheeq-almakhtoom"] as const;
 export type BookId = (typeof BOOK_IDS)[number];
 
 export const DEFAULT_OFFER = {
@@ -51,9 +48,12 @@ export function ensureDefaultOffer(): Promise<void> {
         .insert(offerSettingsTable)
         .values(DEFAULT_OFFER)
         .onConflictDoNothing({ target: offerSettingsTable.id });
-      await db.insert(bookContentTable).values([...DEFAULT_BOOKS]).onConflictDoNothing({
-        target: bookContentTable.id,
-      });
+      await db
+        .insert(bookContentTable)
+        .values([...DEFAULT_BOOKS])
+        .onConflictDoNothing({
+          target: bookContentTable.id,
+        });
     })().catch((error: unknown) => {
       initialization = undefined;
       throw error;
@@ -64,50 +64,47 @@ export function ensureDefaultOffer(): Promise<void> {
 }
 
 export async function getOfferPayload() {
-  await ensureDefaultOffer();
   const [offer] = await db
     .select()
     .from(offerSettingsTable)
     .where(eq(offerSettingsTable.id, 1))
     .limit(1);
-  const books = await db.select({
-    id: bookContentTable.id,
-    title: bookContentTable.title,
-    author: bookContentTable.author,
-    description: bookContentTable.description,
-    hasCover: sql<boolean>`${bookContentTable.coverData} IS NOT NULL`,
-    coverUpdatedAt: bookContentTable.coverUpdatedAt,
-  }).from(bookContentTable);
+  const books = await db
+    .select({
+      id: bookContentTable.id,
+      title: bookContentTable.title,
+      author: bookContentTable.author,
+      description: bookContentTable.description,
+      hasCover: sql<boolean>`${bookContentTable.coverData} IS NOT NULL`,
+      coverUpdatedAt: bookContentTable.coverUpdatedAt,
+    })
+    .from(bookContentTable);
 
-  if (!offer || books.length !== 2) {
-    throw new Error("Offer content is incomplete in the database");
-  }
+  const offerContent = offer ?? DEFAULT_OFFER;
 
   return {
-    title: offer.title,
-    description: offer.description,
-    closingText: offer.closingText,
-    ctaText: offer.ctaText,
-    price: offer.price,
-    deliveryFee: offer.deliveryFee,
-    currency: offer.currency,
-    packageName: offer.packageName,
-    benefits: offer.benefits,
+    title: offerContent.title,
+    description: offerContent.description,
+    closingText: offerContent.closingText,
+    ctaText: offerContent.ctaText,
+    price: offerContent.price,
+    deliveryFee: offerContent.deliveryFee,
+    currency: offerContent.currency,
+    packageName: offerContent.packageName,
+    benefits: offerContent.benefits,
     books: BOOK_IDS.map((id) => {
       const book = books.find((item) => item.id === id);
-      if (!book) {
-        throw new Error(`Missing book content for ${id}`);
-      }
+      const defaultBook = DEFAULT_BOOKS.find((item) => item.id === id)!;
       return {
-        id: book.id as BookId,
-        title: book.title,
-        author: book.author,
-        description: book.description,
-        coverUrl: book.hasCover
-          ? `/api/books/${book.id}/cover?v=${book.coverUpdatedAt?.getTime() ?? 0}`
+        id,
+        title: book?.title ?? defaultBook.title,
+        author: book?.author ?? defaultBook.author,
+        description: book?.description ?? defaultBook.description,
+        coverUrl: book?.hasCover
+          ? `/api/books/${id}/cover?v=${book.coverUpdatedAt?.getTime() ?? 0}`
           : null,
       };
     }),
-    updatedAt: offer.updatedAt,
+    updatedAt: offer?.updatedAt ?? new Date(0),
   };
 }
