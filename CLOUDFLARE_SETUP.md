@@ -57,13 +57,13 @@ pnpm --filter @workspace/db run push
 
 ## 4. إعدادات الدوال والتوافق (Functions & Compatibility)
 
-ملف `wrangler.jsonc` في جذر المشروع هو مصدر إعدادات Pages Functions، ويضبط توافق Node.js المطلوب لخادم API. بعد تفعيل Build system V2، ادفع الملف إلى الفرع المتصل بـ Cloudflare أو أنشئ نشرًا جديدًا ليتم تطبيق إعداداته.
+ملف `wrangler.jsonc` في جذر المشروع هو مصدر إعدادات Pages Functions. يتعامل API مع طلبات Pages عبر واجهة Fetch مباشرةً، ولا يحتاج إلى تشغيل خادم HTTP أو فتح منفذ داخل Pages. يكفي توافق `nodejs_compat` المطلوب لمكتبات Node.js المستخدمة.
 
 إذا كان المشروع لا يستخدم ملف Wrangler كمصدر للإعدادات، اضبط يدويًا من **Settings → Functions → Compatibility flags**:
 - **Compatibility date:** `2026-10-18` أو أحدث.
-- **Compatibility flags:** `nodejs_compat` و `enable_nodejs_http_modules` و `enable_nodejs_http_server_modules`.
+- **Compatibility flags:** `nodejs_compat`.
 
-يتطلب خادم API دعم وحدات HTTP العميلة والخادمية في Node.js. غياب أي من رايتي HTTP يمنع تشغيل API وقد يظهر في `/api/health` كـ `NODE_HTTP_SERVER_MODULES_UNAVAILABLE`. عند اعتماد ملف Wrangler، تأكد من استخدام Build system V2 ليتم تطبيق الرايات على النشر.
+استخدم Build system V2 أو أحدث ليتم تطبيق إعدادات Wrangler على Pages Functions.
 
 ---
 

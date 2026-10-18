@@ -1,6 +1,5 @@
-import { createServer } from "node:http";
-import { httpServerHandler } from "cloudflare:node";
 import { withRequestDatabase } from "@workspace/db";
+import { createCloudflareExpressHandler } from "./lib/cloudflareExpressAdapter";
 
 interface Env {
   HYPERDRIVE?: { connectionString: string };
@@ -17,18 +16,12 @@ interface WorkerContext {
   passThroughOnException(): void;
 }
 
-interface HttpHandler {
-  fetch(request: Request, env: Env, ctx: WorkerContext): Promise<Response>;
-}
+let apiHandler: Promise<(request: Request) => Promise<Response>> | undefined;
 
-let apiHandler: Promise<HttpHandler> | undefined;
-
-function getApiHandler(): Promise<HttpHandler> {
+function getApiHandler(): Promise<(request: Request) => Promise<Response>> {
   apiHandler ??= (async () => {
     const { default: app } = await import("./app");
-    // Passing the server directly lets Cloudflare attach it to the current
-    // Pages Function request. It avoids manually reserving a port in Pages.
-    return httpServerHandler(createServer(app)) as HttpHandler;
+    return createCloudflareExpressHandler(app);
   })().catch((error: unknown) => {
     apiHandler = undefined;
     throw error;
@@ -46,12 +39,6 @@ function getSafeInitializationErrorCode(error: unknown): string {
     /^[A-Za-z0-9_]{2,64}$/.test(candidate.code)
   ) {
     return candidate.code.toUpperCase();
-  }
-  if (
-    typeof candidate.message === "string" &&
-    /http\.createServer is not implemented/i.test(candidate.message)
-  ) {
-    return "NODE_HTTP_SERVER_MODULES_UNAVAILABLE";
   }
   if (
     typeof candidate.name === "string" &&
@@ -121,7 +108,7 @@ const worker = {
         const handler = await getApiHandler();
         const isHyperdrive = Boolean(env.HYPERDRIVE?.connectionString);
         return await withRequestDatabase(
-          () => handler.fetch(request, env, ctx),
+          () => handler(request),
           {
             connectionString,
             useConnectionStringAsIs: isHyperdrive,
@@ -137,10 +124,7 @@ const worker = {
             error: "تعذر تشغيل واجهة الموقع.",
             code: "API_INITIALIZATION_FAILED",
             errorCode,
-            help:
-              errorCode === "NODE_HTTP_SERVER_MODULES_UNAVAILABLE"
-                ? "دعم وحدات Node.js HTTP غير مفعّل بالكامل في Cloudflare Pages. فعّل Build system V2 وتأكد من رايات nodejs_compat وenable_nodejs_http_modules وenable_nodejs_http_server_modules ثم أعد النشر."
-                : "افتح Workers & Pages → khira → Observability → Logs لقراءة سبب الخطأ، من دون مشاركة أي أسرار.",
+            help: "افتح مشروع Pages → Observability → Logs لقراءة سبب الخطأ، من دون مشاركة أي أسرار.",
           },
           { status: 503 },
         );
